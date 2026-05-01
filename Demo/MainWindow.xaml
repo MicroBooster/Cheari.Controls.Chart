@@ -1,0 +1,51 @@
+<dx:ThemedWindow
+    xmlns:dxa="http://schemas.devexpress.com/winfx/2008/xaml/accordion"
+    x:Class="Demo.MainWindow"
+    mc:Ignorable="d"
+    Title="图表控件演示" Height="600" Width="1100"
+    xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:prism="http://prismlibrary.com/"
+    Padding="0">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="220" MinWidth="180" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" MinWidth="400" />
+        </Grid.ColumnDefinitions>
+
+        <dxa:AccordionControl x:Name="NavigationAccordion"
+                              Grid.Column="0"
+                              ExpandMode="SingleOrNone"
+                              SelectionUnit="SubItem"
+                              BorderBrush="#49576E" BorderThickness="0,0,1,0"
+                              SelectedItemChanged="NavigationAccordion_SelectedItemChanged">
+            <dxa:AccordionItem Header="基础功能">
+                <dxa:AccordionItem Header="折线图" Tag="LineChartView" />
+                <dxa:AccordionItem Header="散点图" Tag="ScatterChartView" />
+                <dxa:AccordionItem Header="柱状图" Tag="BarChartView" />
+                <dxa:AccordionItem Header="面积图" Tag="AreaChartView" />
+                <dxa:AccordionItem Header="蜡烛图" Tag="OhlcChartView" />
+            </dxa:AccordionItem>
+            <dxa:AccordionItem Header="高级功能">
+                <dxa:AccordionItem Header="四轴演示" Tag="AxisShowcaseView" />
+                <dxa:AccordionItem Header="多轴" Tag="MultiAxisView" />
+                <dxa:AccordionItem Header="对数轴" Tag="LogAxisView" />
+                <dxa:AccordionItem Header="FIFO演示" Tag="FifoChartView" />
+            </dxa:AccordionItem>
+            <dxa:AccordionItem Header="渲染后端">
+                <dxa:AccordionItem Header="自动后端" Tag="LineChartView" />
+                <dxa:AccordionItem Header="强制软件" Tag="SoftwareBackendView" />
+                <dxa:AccordionItem Header="硬件诊断" Tag="HardwareOnlyDiagnosticsView" />
+            </dxa:AccordionItem>
+        </dxa:AccordionControl>
+
+        <GridSplitter Grid.Column="1" Width="1" HorizontalAlignment="Center" ResizeDirection="Columns" />
+
+        <ContentControl Grid.Column="2"
+                        prism:RegionManager.RegionName="ContentRegion" />
+    </Grid>
+</dx:ThemedWindow>

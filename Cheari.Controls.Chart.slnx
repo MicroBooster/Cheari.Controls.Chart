@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="Cheari.Controls.Chart/Cheari.Controls.Chart.csproj" />
+  <Project Path="Cheari.Controls.Chart.Tests/Cheari.Controls.Chart.Tests.csproj" />
+  <Project Path="Demo/Demo.csproj" Id="131661f4-23a3-4a59-9e3d-98d8aed79462" />
+</Solution>

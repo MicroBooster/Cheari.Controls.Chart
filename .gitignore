@@ -1,0 +1,30 @@
+# Visual Studio generated files
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Build outputs
+bin/
+obj/
+
+# NuGet packages
+packages/
+*.nupkg
+
+# Test results
+TestResults/
+*.trx
+
+# Logs
+*.log
+
+# Trae IDE files
+.trae/
+
+# VS Code
+.vscode/
+
+# Build artifacts
+artifacts/

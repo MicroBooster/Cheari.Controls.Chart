@@ -1,0 +1,1 @@
+D:\workspaces\2026\鍥捐〃鎺т欢\Cheari.Controls.Chart\Axes\Controls\AxisControl.cs(195,196): error CS1513: 搴旇緭鍏?} [D:\workspaces\2026\鍥捐〃鎺т欢\Cheari.Controls.Chart\Cheari.Controls.Chart_bfkasjg3_wpftmp.csproj]

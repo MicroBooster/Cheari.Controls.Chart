@@ -1,4 +1,5 @@
 using System.Collections.Specialized;
+using System.ComponentModel;
 using Cheari.Controls.Core;
 using Cheari.Controls.Data;
 
@@ -60,6 +61,12 @@ internal sealed class SnapshotDataSeriesAdapter : IDataSeries
 
     public DataRange YRange => _frame.YRange;
 
+    public object? Tag
+    {
+        get => null;
+        set { }
+    }
+
     public event EventHandler? RangeChanged
     {
         add { }
@@ -73,6 +80,12 @@ internal sealed class SnapshotDataSeriesAdapter : IDataSeries
     }
 
     public event EventHandler<DataSeriesChangeEventArgs>? DataChanged
+    {
+        add { }
+        remove { }
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged
     {
         add { }
         remove { }

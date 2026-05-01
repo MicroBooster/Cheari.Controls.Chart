@@ -285,12 +285,18 @@ public partial class Chart
 
         modifier.OnAttached();
         modifier.SetContext(_renderContext);
+
+        if (modifier is ChartModifierBase baseModifier)
+            baseModifier.OverlayCanvas = _modifierOverlay;
     }
 
     private void DetachModifier(IChartModifier modifier)
     {
         if (!_attachedModifiers.Remove(modifier))
             return;
+
+        if (modifier is ChartModifierBase baseModifier)
+            baseModifier.OverlayCanvas = null;
 
         modifier.OnDetached();
     }

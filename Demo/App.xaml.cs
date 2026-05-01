@@ -36,8 +36,14 @@ namespace Demo
             containerRegistry.RegisterForNavigation<LogAxisView, LogAxisViewModel>();
             containerRegistry.RegisterForNavigation<FifoChartView, FifoChartViewModel>();
             containerRegistry.RegisterForNavigation<LegendDemoView, LegendDemoViewModel>();
+            containerRegistry.RegisterForNavigation<InteractionDemoView, InteractionDemoViewModel>();
+            containerRegistry.RegisterForNavigation<DataReuseDemoView, DataReuseDemoViewModel>();
+            containerRegistry.RegisterForNavigation<FinancialChartView, FinancialChartViewModel>();
+            containerRegistry.RegisterForNavigation<ThemeCustomizationView, ThemeCustomizationViewModel>();
+            containerRegistry.RegisterForNavigation<DataExportView, DataExportViewModel>();
             containerRegistry.RegisterForNavigation<SoftwareBackendView, SoftwareBackendViewModel>();
             containerRegistry.RegisterForNavigation<HardwareOnlyDiagnosticsView, HardwareOnlyDiagnosticsViewModel>();
+            containerRegistry.RegisterForNavigation<HomeView, HomeViewModel>();
         }
 
         protected override Window CreateShell()

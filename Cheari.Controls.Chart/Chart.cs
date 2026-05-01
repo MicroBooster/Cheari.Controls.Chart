@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Markup;
 using System.Windows.Media;
 using Cheari.Controls.Annotations;
 using Cheari.Controls.Axes;
@@ -16,23 +17,17 @@ using Cheari.Controls.Modifiers;
 using Cheari.Controls.Rendering;
 using Cheari.Controls.Rendering.Context;
 using Cheari.Controls.Series;
+using Cheari.Controls.Synchronization;
 using Vortice.Wpf;
 
 namespace Cheari.Controls;
 
 /// <summary>
 /// Cheari 图表控件，一个高性能的 WPF 图表控件，支持多种图表类型和交互功能。
-/// 
-/// 本文件包含核心依赖属性、构造函数、鼠标事件转发和公共方法。
-/// 职责拆分到以下 partial class 文件：
-/// - Chart.AxisManagement.cs   — 轴订阅/范围同步/AutoRange
-/// - Chart.SeriesManagement.cs — 系列订阅/数据变更处理
-/// - Chart.SurfaceManagement.cs — FPS计时器/渲染重试/连续刷新
-/// - Chart.PlotAreaLayout.cs   — 视口度量/轴展示器偏移/角画刷
-/// - Chart.RenderingLifecycle.cs — 渲染器初始化/切换/降级
 /// </summary>
 [ToolboxItem(true)]
 [DesignTimeVisible(true)]
+[ContentProperty(nameof(Legend))]
 public partial class Chart : Control
 {
     private static readonly IRenderableSeries[] s_emptySeries = Array.Empty<IRenderableSeries>();
@@ -64,8 +59,8 @@ public partial class Chart : Control
         _renderContext.SeriesAccessor = GetCurrentSeriesList;
         _renderContext.XAxesAccessor = GetCurrentXAxesList;
         _renderContext.YAxesAccessor = GetCurrentYAxesList;
-        _renderContext.OnRangeChanged = ApplyRenderContextRangeChange;
-        _renderContext.OnAxisRangeChanged = ApplyRenderContextAxisRangeChange;
+        _renderContext.OnRangeChanged = ChainedRangeChanged;
+        _renderContext.OnAxisRangeChanged = ChainedAxisRangeChanged;
         _markDirtyFromDispatcher = () =>
         {
             Interlocked.Exchange(ref _pendingUiDirtyRequest, 0);
@@ -225,14 +220,50 @@ public partial class Chart : Control
 
     /// <summary>标识 <see cref="Legend"/> 依赖属性。</summary>
     public static readonly DependencyProperty LegendProperty =
-        DependencyProperty.Register(nameof(Legend), typeof(ILegend), typeof(Chart),
+        DependencyProperty.Register(nameof(Legend), typeof(LegendControl), typeof(Chart),
             new PropertyMetadata(null, OnLegendChanged));
 
     /// <summary>获取或设置图表图例。</summary>
-    public ILegend? Legend
+    public LegendControl? Legend
     {
-        get => (ILegend?)GetValue(LegendProperty);
+        get => (LegendControl?)GetValue(LegendProperty);
         set => SetValue(LegendProperty, value);
+    }
+
+    /// <summary>标识 <see cref="Annotations"/> 依赖属性。</summary>
+    public static readonly DependencyProperty AnnotationsProperty =
+        DependencyProperty.Register(nameof(Annotations), typeof(ObservableCollection<IAnnotation>), typeof(Chart),
+            new PropertyMetadata(null));
+
+    /// <summary>获取或设置图表标注集合。</summary>
+    public ObservableCollection<IAnnotation>? Annotations
+    {
+        get => (ObservableCollection<IAnnotation>?)GetValue(AnnotationsProperty);
+        set => SetValue(AnnotationsProperty, value);
+    }
+
+    /// <summary>标识 <see cref="XAxisGroup"/> 依赖属性。</summary>
+    public static readonly DependencyProperty XAxisGroupProperty =
+        DependencyProperty.Register(nameof(XAxisGroup), typeof(IAxisGroup), typeof(Chart),
+            new PropertyMetadata(null, OnAxisGroupChanged));
+
+    /// <summary>获取或设置共享的X轴组，用于多图联动。</summary>
+    public IAxisGroup? XAxisGroup
+    {
+        get => (IAxisGroup?)GetValue(XAxisGroupProperty);
+        set => SetValue(XAxisGroupProperty, value);
+    }
+
+    /// <summary>标识 <see cref="YAxisGroup"/> 依赖属性。</summary>
+    public static readonly DependencyProperty YAxisGroupProperty =
+        DependencyProperty.Register(nameof(YAxisGroup), typeof(IAxisGroup), typeof(Chart),
+            new PropertyMetadata(null, OnAxisGroupChanged));
+
+    /// <summary>获取或设置共享的Y轴组，用于多图联动。</summary>
+    public IAxisGroup? YAxisGroup
+    {
+        get => (IAxisGroup?)GetValue(YAxisGroupProperty);
+        set => SetValue(YAxisGroupProperty, value);
     }
 
     /// <summary>标识 <see cref="RendererPreference"/> 依赖属性。</summary>
@@ -331,7 +362,60 @@ public partial class Chart : Control
     {
         if (d is Chart chart)
         {
+            // 清理旧的 LegendControl 监听
+            if (chart._currentLegendControl != null)
+            {
+                // 移除旧 Legend 监听
+                if (chart._currentLegendControl.Legend is INotifyPropertyChanged oldNpc)
+                    oldNpc.PropertyChanged -= chart.OnLegendPropertyChanged;
+
+                // 移除旧 LegendControl 从视觉树
+                if (chart._currentLegendControl.Parent is Panel parentPanel)
+                {
+                    parentPanel.Children.Remove(chart._currentLegendControl);
+                }
+            }
+
+            // 设置新的 LegendControl
+            chart._currentLegendControl = e.NewValue as LegendControl;
+
+            if (chart._currentLegendControl != null)
+            {
+                // 如果 LegendControl 还没有设置 Legend，就创建一个新的
+                ILegend legend = chart._currentLegendControl.Legend ?? new ChartLegend();
+                // 只有在 LegendControl 的 Legend 为 null 时才设置它
+                if (chart._currentLegendControl.Legend == null)
+                {
+                    chart._currentLegendControl.Legend = legend;
+                }
+                // 监听 Legend 的 PropertyChanged 事件
+                if (legend is INotifyPropertyChanged newNpc)
+                    newNpc.PropertyChanged += chart.OnLegendPropertyChanged;
+
+                // 设置容器引用
+                chart._currentLegendControl.SetContainers(chart._internalLegendGrid, chart._chartGrid);
+            }
+
             chart.UpdateLegendSeries();
+        }
+    }
+
+    private void OnLegendPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ILegend.Position))
+        {
+            _currentLegendControl?.UpdatePosition();
+        }
+    }
+
+    private static void OnAxisGroupChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is Chart chart && chart.IsLoaded)
+        {
+            if (e.OldValue is IAxisGroup oldGroup)
+                oldGroup.Unregister(chart);
+            if (e.NewValue is IAxisGroup newGroup)
+                newGroup.Register(chart);
         }
     }
 
@@ -358,8 +442,6 @@ public partial class Chart : Control
 
     private static void OnPlotAreaBorderThicknessChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
-        if (d is Chart chart)
-            chart.UpdateAxisPresenterOverlap();
     }
 
     /// <summary>标识 <see cref="IsStreaming"/> 依赖属性。</summary>
@@ -391,6 +473,9 @@ public partial class Chart : Control
     private DrawingSurface? _surface;
     private Image? _softwareSurface;
     private GridLinesControl? _gridLines;
+    private Grid? _internalLegendGrid;
+    private Grid? _chartGrid;
+    private Canvas? _modifierOverlay;
     private IRenderer? _renderer;
     private readonly ChartRenderContext _renderContext = new();
     private readonly SeriesRendererDispatcher _seriesRenderer = new();
@@ -402,6 +487,7 @@ public partial class Chart : Control
     private bool _modifiersManagedByChart;
     private bool _surfaceContentLoaded;
     private readonly HashSet<IChartModifier> _attachedModifiers = new();
+    private LegendControl? _currentLegendControl;
 
     internal IChartRendererFactory RendererFactory { get; set; } = new DefaultChartRendererFactory();
 
@@ -438,11 +524,31 @@ public partial class Chart : Control
         RefreshModifierContexts();
         UpdateFpsTimerState();
         UpdateRenderContext();
+        XAxisGroup?.Register(this);
+        YAxisGroup?.Register(this);
         MarkDirty();
+
+        // 在控件完全加载后，重新处理 LegendControl
+        if (_currentLegendControl != null && _currentLegendControl.Legend != null)
+        {
+            // 移除旧的监听（如果有）
+            if (_currentLegendControl.Legend is INotifyPropertyChanged oldNpc)
+                oldNpc.PropertyChanged -= OnLegendPropertyChanged;
+            
+            // 重新添加监听
+            if (_currentLegendControl.Legend is INotifyPropertyChanged newNpc)
+                newNpc.PropertyChanged += OnLegendPropertyChanged;
+            
+            // 重新更新 Legend 系列和位置
+            UpdateLegendSeries();
+            _currentLegendControl.UpdatePosition();
+        }
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
+        XAxisGroup?.Unregister(this);
+        YAxisGroup?.Unregister(this);
         DetachAllModifiers();
         CleanupRenderingState();
     }
@@ -540,10 +646,14 @@ public partial class Chart : Control
         _surface = GetTemplateChild("PART_Surface") as DrawingSurface;
         _softwareSurface = GetTemplateChild("PART_SoftwareSurface") as Image;
         _gridLines = GetTemplateChild("PART_GridLines") as GridLinesControl;
+        _internalLegendGrid = GetTemplateChild("PART_InternalLegendGrid") as Grid;
+        _chartGrid = GetTemplateChild("PART_ChartGrid") as Grid;
         _topAxesPresenter = GetTemplateChild("PART_TopAxesPresenter") as FrameworkElement;
         _leftAxesPresenter = GetTemplateChild("PART_LeftAxesPresenter") as FrameworkElement;
         _rightAxesPresenter = GetTemplateChild("PART_RightAxesPresenter") as FrameworkElement;
         _bottomAxesPresenter = GetTemplateChild("PART_BottomAxesPresenter") as FrameworkElement;
+        _annotationsPanel = GetTemplateChild("PART_AnnotationsPanel") as AnnotationsPanel;
+        _modifierOverlay = GetTemplateChild("PART_ModifierOverlay") as Canvas;
         InvalidatePlotAreaMetrics();
         InvalidateAxisPlacementCaches();
 
@@ -559,8 +669,26 @@ public partial class Chart : Control
         if (_gridLines != null)
             _gridLines.SizeChanged += OnGridLinesSizeChanged;
 
-        UpdateAxisPresenterOverlap();
         UpdateModifiers();
+        // 确保在模板应用后重新设置 Legend，因为 _chartGrid 和 _internalLegendGrid 现在才可用
+        if (_currentLegendControl != null)
+        {
+            // 如果 _currentLegendControl.Legend 已经有值了，重新设置监听
+            if (_currentLegendControl.Legend != null)
+            {
+                // 移除旧的监听
+                if (_currentLegendControl.Legend is INotifyPropertyChanged npc)
+                    npc.PropertyChanged -= OnLegendPropertyChanged;
+                
+                // 重新添加监听
+                if (_currentLegendControl.Legend is INotifyPropertyChanged newNpc)
+                    newNpc.PropertyChanged += OnLegendPropertyChanged;
+            }
+            // 更新容器引用
+            _currentLegendControl.SetContainers(_internalLegendGrid, _chartGrid);
+        }
+
+        UpdateLegendSeries();
         UpdateRenderContext();
         UpdateSurfaceVisualState();
         SignalViewportChanged();
@@ -740,8 +868,38 @@ public partial class Chart : Control
     {
         var legend = Legend;
         var series = Series;
-        if (legend != null && series != null)
-            legend.SetSeries(series);
+        if (legend?.Legend != null && series != null)
+            legend.Legend.SetSeries(series);
+    }
+
+    private void ChainedRangeChanged(DataRange xRange, DataRange yRange)
+    {
+        ApplyRenderContextRangeChange(xRange, yRange);
+        XAxisGroup?.NotifyRangeChanged(this, DefaultXAxisId, xRange);
+        YAxisGroup?.NotifyRangeChanged(this, DefaultYAxisId, yRange);
+    }
+
+    private void ChainedAxisRangeChanged(string axisId, DataRange range)
+    {
+        ApplyRenderContextAxisRangeChange(axisId, range);
+        if (axisId == DefaultXAxisId)
+            XAxisGroup?.NotifyRangeChanged(this, axisId, range);
+        else
+            YAxisGroup?.NotifyRangeChanged(this, axisId, range);
+    }
+
+    private void OnContextRangeChanged(DataRange xRange, DataRange yRange)
+    {
+        XAxisGroup?.NotifyRangeChanged(this, DefaultXAxisId, xRange);
+        YAxisGroup?.NotifyRangeChanged(this, DefaultYAxisId, yRange);
+    }
+
+    private void OnContextAxisRangeChanged(string axisId, DataRange range)
+    {
+        if (axisId == DefaultXAxisId)
+            XAxisGroup?.NotifyRangeChanged(this, axisId, range);
+        else
+            YAxisGroup?.NotifyRangeChanged(this, axisId, range);
     }
 
     #endregion

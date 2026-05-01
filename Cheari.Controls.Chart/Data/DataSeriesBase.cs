@@ -1,4 +1,6 @@
 using System.Collections.Specialized;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using Cheari.Controls.Core;
 
 namespace Cheari.Controls.Data;
@@ -14,6 +16,8 @@ public abstract class DataSeriesBase : IDataSeries, IDataFrameProvider
     protected int _fifoCapacity;
     /// <summary>FIFO 模式下的数据头偏移索引。</summary>
     protected int _headIndex;
+    /// <summary>存储 Tag 属性的字段。</summary>
+    private object? _tag;
 
     /// <summary>当数据范围发生变化时触发。</summary>
     public event EventHandler? RangeChanged;
@@ -21,6 +25,8 @@ public abstract class DataSeriesBase : IDataSeries, IDataFrameProvider
     public event EventHandler<DataSeriesChangeEventArgs>? DataChanged;
     /// <summary>当集合发生变更时触发。</summary>
     public event NotifyCollectionChangedEventHandler? CollectionChanged;
+    /// <summary>当属性值发生变化时触发。</summary>
+    public event PropertyChangedEventHandler? PropertyChanged;
 
     /// <summary>获取数据点数量。</summary>
     public abstract int Count { get; }
@@ -69,6 +75,34 @@ public abstract class DataSeriesBase : IDataSeries, IDataFrameProvider
     public abstract DataRange XRange { get; }
     /// <summary>获取Y轴数据范围。</summary>
     public abstract DataRange YRange { get; }
+
+    /// <summary>
+    /// 获取或设置附加信息，用于在 Legend 中显示曲线的额外数据。
+    /// </summary>
+    public object? Tag
+    {
+        get => _tag;
+        set => SetProperty(ref _tag, value);
+    }
+
+    /// <summary>
+    /// 属性变更辅助方法，触发 PropertyChanged 事件。
+    /// </summary>
+    protected bool SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value)) return false;
+        field = value;
+        OnPropertyChanged(propertyName);
+        return true;
+    }
+
+    /// <summary>
+    /// 触发 PropertyChanged 事件。
+    /// </summary>
+    protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
 
     DataFrame IDataFrameProvider.CreateFrame() => CreateFrameCore();
 

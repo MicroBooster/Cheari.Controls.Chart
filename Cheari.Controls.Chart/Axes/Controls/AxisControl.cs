@@ -507,6 +507,11 @@ public class AxisControl : Control
             // 像素对齐：WPF在0.5像素边界上渲染线条以获得锐利效果
             // 例如：Math.Round(186) + 0.5 = 186.5，表示从像素186到187的线条中心
             double lineY = Math.Round(position) + 0.5;
+            // 边界检查：确保刻度线不超出控件边界
+            // 当AlignRangeToTicks=True时，边界刻度可能映射到控件边缘（position=0或height），
+            // 此时lineY会超出范围，需要钳制到[0.5, height-0.5]以防止刻度线被裁剪
+            lineY = Math.Min(lineY, height - 0.5);
+            lineY = Math.Max(lineY, 0.5);
             double tickX2 = isLeft ? axisX - TickLength : axisX + TickLength;
 
             var tickLine = GetOrCreateTickLine(lineIndex++);

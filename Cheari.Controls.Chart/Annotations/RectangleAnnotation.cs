@@ -5,8 +5,10 @@ using System.Windows.Shapes;
 
 namespace Cheari.Controls.Annotations;
 
+/// <summary>矩形区域标注，在图表上绘制一个矩形区域。</summary>
 public class RectangleAnnotation : AnnotationBase
 {
+    /// <inheritdoc />
     public override FrameworkElement CreateVisual()
     {
         var rect = new Rectangle
@@ -39,6 +41,7 @@ public class RectangleAnnotation : AnnotationBase
         return canvas;
     }
 
+    /// <inheritdoc />
     public override void UpdateVisual(FrameworkElement element)
     {
         if (element is Canvas canvas && canvas.Children.Count >= 2)

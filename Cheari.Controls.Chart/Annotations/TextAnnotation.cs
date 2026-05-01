@@ -4,10 +4,13 @@ using System.Windows.Media;
 
 namespace Cheari.Controls.Annotations;
 
+/// <summary>文本标注，在图表上显示文本。</summary>
 public class TextAnnotation : AnnotationBase
 {
+    /// <summary>标注标签。</summary>
     public string? Label { get; set; }
 
+    /// <inheritdoc />
     public override FrameworkElement CreateVisual()
     {
         var tb = new TextBlock
@@ -23,6 +26,7 @@ public class TextAnnotation : AnnotationBase
         return tb;
     }
 
+    /// <inheritdoc />
     public override void UpdateVisual(FrameworkElement element)
     {
         if (element is TextBlock tb)

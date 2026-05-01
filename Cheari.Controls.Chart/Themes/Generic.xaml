@@ -2,6 +2,7 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:local="clr-namespace:Cheari.Controls"
                     xmlns:legend="clr-namespace:Cheari.Controls.Legend"
+                    xmlns:annotations="clr-namespace:Cheari.Controls.Annotations"
                     xmlns:axesControls="clr-namespace:Cheari.Controls.Axes.Controls"
                     xmlns:vortice="clr-namespace:Vortice.Wpf;assembly=Vortice.Wpf">
 
@@ -32,13 +33,14 @@
     </Style>
 
     <Style TargetType="{x:Type legend:LegendControl}">
+        <Setter Property="Margin" Value="8" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type legend:LegendControl}">
-                    <Border Background="#CC1A1A2E"
+                    <Border x:Name="PART_LegendBorder"
+                            Background="#CC1A1A2E"
                             BorderBrush="#44FFFFFF"
                             BorderThickness="1"
-                            CornerRadius="4"
                             Padding="6">
                         <StackPanel x:Name="PART_ItemsHost" />
                     </Border>
@@ -64,21 +66,46 @@
                             Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}">
-                        <Grid>
+                        <Grid x:Name="PART_ChartGrid">
+                            <!-- 5列 -->
                             <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
+                            <!-- 6行 -->
                             <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="*" />
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
 
-                            <!-- Top X Axes -->
+                            <!-- Row 0: 标题区 -->
+
+                            <!-- Row 1: ExternalTop 图例 -->
+                            <!-- Row 2: 左上角 + 顶部坐标轴 + 右上角 -->
+                            <!-- 左上角补线 -->
+                            <Grid x:Name="PART_CornerTopLeft"
+                                  Grid.Row="2"
+                                  Grid.Column="1"
+                                  Panel.ZIndex="1"
+                                  IsHitTestVisible="False"
+                                  Background="Transparent">
+                                <Border Width="1"
+                                        Height="1"
+                                        HorizontalAlignment="Right"
+                                        VerticalAlignment="Bottom"
+                                        Background="{Binding TopLeftCornerBrush, RelativeSource={RelativeSource TemplatedParent}}" />
+                            </Grid>
+                            <!-- 顶部坐标轴 -->
                             <axesControls:AxisItemsControl x:Name="PART_TopAxesPresenter"
-                                                        Grid.Column="1" Grid.Row="0"
+                                                        Grid.Row="2"
+                                                        Grid.Column="2"
                                                         Panel.ZIndex="1"
                                                         IsHitTestVisible="False"
                                                         ItemsSource="{Binding TopXAxes, RelativeSource={RelativeSource TemplatedParent}}">
@@ -88,10 +115,26 @@
                                     </ItemsPanelTemplate>
                                 </axesControls:AxisItemsControl.ItemsPanel>
                             </axesControls:AxisItemsControl>
+                            <!-- 右上角补线 -->
+                            <Grid x:Name="PART_CornerTopRight"
+                                  Grid.Row="2"
+                                  Grid.Column="3"
+                                  Panel.ZIndex="1"
+                                  IsHitTestVisible="False"
+                                  Background="Transparent">
+                                <Border Width="1"
+                                        Height="1"
+                                        HorizontalAlignment="Left"
+                                        VerticalAlignment="Bottom"
+                                        Background="{Binding TopRightCornerBrush, RelativeSource={RelativeSource TemplatedParent}}" />
+                            </Grid>
 
+                            <!-- Row 3: 核心绘图行 -->
+                            <!-- ExternalLeft -->
                             <!-- Left Y Axes -->
                             <axesControls:AxisItemsControl x:Name="PART_LeftAxesPresenter"
-                                                        Grid.Column="0" Grid.Row="1"
+                                                        Grid.Row="3"
+                                                        Grid.Column="1"
                                                         Panel.ZIndex="1"
                                                         IsHitTestVisible="False"
                                                         ItemsSource="{Binding LeftYAxes, RelativeSource={RelativeSource TemplatedParent}}">
@@ -102,79 +145,95 @@
                                 </axesControls:AxisItemsControl.ItemsPanel>
                             </axesControls:AxisItemsControl>
 
-                            <!-- Plot Area -->
-                            <Grid Grid.Column="1" Grid.Row="1" ClipToBounds="True">
-                                <Border x:Name="PART_PlotAreaBorder"
-                                        Background="{TemplateBinding PlotAreaBackground}"
-                                        BorderBrush="{TemplateBinding PlotAreaBorderBrush}"
-                                        BorderThickness="{TemplateBinding PlotAreaBorderThickness}" />
-                                <Grid>
-                                    <axesControls:GridLinesControl x:Name="PART_GridLines"
-                                                                HorizontalAlignment="Stretch"
-                                                                VerticalAlignment="Stretch"
-                                                                XAxes="{Binding XAxes, RelativeSource={RelativeSource TemplatedParent}}"
-                                                                YAxes="{Binding YAxes, RelativeSource={RelativeSource TemplatedParent}}" />
-                                    <vortice:DrawingSurface x:Name="PART_Surface"
-                                                            Stretch="Fill"
-                                                            HorizontalAlignment="Stretch"
-                                                            VerticalAlignment="Stretch" />
-                                    <Image x:Name="PART_SoftwareSurface"
-                                           Stretch="Fill"
-                                           HorizontalAlignment="Stretch"
-                                           VerticalAlignment="Stretch"
-                                           Visibility="Collapsed"
-                                           IsHitTestVisible="False" />
-                                    <Border x:Name="PART_ErrorOverlay"
-                                            Margin="12"
-                                            Padding="10"
-                                            Background="#AA3A0000"
-                                            BorderBrush="#CCFF8080"
-                                            BorderThickness="1"
-                                            CornerRadius="4"
-                                            HorizontalAlignment="Left"
-                                            VerticalAlignment="Top"
-                                            Visibility="Collapsed"
-                                            IsHitTestVisible="False">
-                                        <TextBlock MaxWidth="360"
-                                                   Foreground="#FFFFC8C8"
-                                                   TextWrapping="Wrap"
-                                                   Text="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=RenderError}" />
-                                    </Border>
-                                    <legend:LegendControl x:Name="PART_Legend"
-                                                          Legend="{Binding Legend, RelativeSource={RelativeSource TemplatedParent}}"
-                                                          HorizontalAlignment="Left"
-                                                          VerticalAlignment="Top"
-                                                          Margin="8"
-                                                          Panel.ZIndex="10" />
-                                </Grid>
+                            <!-- Plot Area 区域 - 重叠多个元素 -->
+                            <!-- Plot Border -->
+                            <Border x:Name="PART_PlotAreaBorder"
+                                    Grid.Row="3"
+                                    Grid.Column="2"
+                                    Background="{TemplateBinding PlotAreaBackground}"
+                                    BorderBrush="{TemplateBinding PlotAreaBorderBrush}"
+                                    BorderThickness="{TemplateBinding PlotAreaBorderThickness}" />
+                            <!-- Grid Lines -->
+                            <axesControls:GridLinesControl x:Name="PART_GridLines"
+                                                        Grid.Row="3"
+                                                        Grid.Column="2"
+                                                        HorizontalAlignment="Stretch"
+                                                        VerticalAlignment="Stretch"
+                                                        XAxes="{Binding XAxes, RelativeSource={RelativeSource TemplatedParent}}"
+                                                        YAxes="{Binding YAxes, RelativeSource={RelativeSource TemplatedParent}}" />
+                            <!-- Drawing Surface -->
+                            <vortice:DrawingSurface x:Name="PART_Surface"
+                                                    Grid.Row="3"
+                                                    Grid.Column="2"
+                                                    Stretch="Fill"
+                                                    HorizontalAlignment="Stretch"
+                                                    VerticalAlignment="Stretch" />
+                            <!-- Software Surface -->
+                            <Image x:Name="PART_SoftwareSurface"
+                                   Grid.Row="3"
+                                   Grid.Column="2"
+                                   Stretch="Fill"
+                                   HorizontalAlignment="Stretch"
+                                   VerticalAlignment="Stretch"
+                                   Visibility="Collapsed"
+                                   IsHitTestVisible="False" />
+                            <!-- Error Overlay -->
+                            <Border x:Name="PART_ErrorOverlay"
+                                    Grid.Row="3"
+                                    Grid.Column="2"
+                                    Margin="12"
+                                    Padding="10"
+                                    Background="#AA3A0000"
+                                    BorderBrush="#CCFF8080"
+                                    BorderThickness="1"
+                                    CornerRadius="4"
+                                    HorizontalAlignment="Left"
+                                    VerticalAlignment="Top"
+                                    Visibility="Collapsed"
+                                    IsHitTestVisible="False">
+                                <TextBlock MaxWidth="360"
+                                           Foreground="#FFFFC8C8"
+                                           TextWrapping="Wrap"
+                                           Text="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=RenderError}" />
+                            </Border>
+                            <!-- Annotations -->
+                            <annotations:AnnotationsPanel x:Name="PART_AnnotationsPanel"
+                                                          Grid.Row="3"
+                                                          Grid.Column="2"
+                                                          Annotations="{Binding Annotations, RelativeSource={RelativeSource TemplatedParent}}"
+                                                          XAxes="{Binding XAxes, RelativeSource={RelativeSource TemplatedParent}}"
+                                                          YAxes="{Binding YAxes, RelativeSource={RelativeSource TemplatedParent}}"
+                                                          Panel.ZIndex="9"
+                                                          IsHitTestVisible="True"
+                                                          Background="Transparent" />
+                            <!-- Modifier Overlay -->
+                            <Canvas x:Name="PART_ModifierOverlay"
+                                    Grid.Row="3"
+                                    Grid.Column="2"
+                                    Panel.ZIndex="8"
+                                    IsHitTestVisible="False" />
+
+                            <!-- 内部图例 3x3 Grid -->
+                            <Grid x:Name="PART_InternalLegendGrid"
+                                  Grid.Row="3"
+                                  Grid.Column="2"
+                                  Panel.ZIndex="10">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
                             </Grid>
 
-                            <!-- Corner Connectors - placed outside PlotArea to avoid clipping -->
-                            <Canvas Grid.Column="1" Grid.Row="1" Panel.ZIndex="20" IsHitTestVisible="False" ClipToBounds="False">
-                                <!-- Top-Left Corner: extends left axis line horizontally to the right -->
-                                <Line X1="-1" Y1="-0.5" X2="0" Y2="-0.5" 
-                                      Stroke="{Binding TopLeftCornerBrush, RelativeSource={RelativeSource TemplatedParent}}" 
-                                      StrokeThickness="1" />
-                                <!-- Top-Right Corner: extends top axis line horizontally to the right -->
-                                <Line X1="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Canvas}, Converter={x:Static local:MathSubtractConverter.Instance}, ConverterParameter=1}" Y1="-0.5" 
-                                      X2="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Canvas}, Converter={x:Static local:MathAddConverter.Instance}, ConverterParameter=1}" Y2="-0.5" 
-                                      Stroke="{Binding TopRightCornerBrush, RelativeSource={RelativeSource TemplatedParent}}" 
-                                      StrokeThickness="1" />
-                                <!-- Bottom-Left Corner: extends bottom axis line horizontally to the left -->
-                                <Line X1="-1" Y1="{Binding ActualHeight, RelativeSource={RelativeSource AncestorType=Canvas}, Converter={x:Static local:MathAddConverter.Instance}, ConverterParameter=0.5}" 
-                                      X2="0" Y2="{Binding ActualHeight, RelativeSource={RelativeSource AncestorType=Canvas}, Converter={x:Static local:MathAddConverter.Instance}, ConverterParameter=0.5}" 
-                                      Stroke="{Binding BottomLeftCornerBrush, RelativeSource={RelativeSource TemplatedParent}}" 
-                                      StrokeThickness="1" />
-                                <!-- Bottom-Right Corner: extends right axis line vertically downward -->
-                                <Line X1="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Canvas}, Converter={x:Static local:MathAddConverter.Instance}, ConverterParameter=0.5}" Y1="{Binding ActualHeight, RelativeSource={RelativeSource AncestorType=Canvas}, Converter={x:Static local:MathSubtractConverter.Instance}, ConverterParameter=0.5}" 
-                                      X2="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Canvas}, Converter={x:Static local:MathAddConverter.Instance}, ConverterParameter=0.5}" Y2="{Binding ActualHeight, RelativeSource={RelativeSource AncestorType=Canvas}, Converter={x:Static local:MathAddConverter.Instance}, ConverterParameter=1}" 
-                                      Stroke="{Binding BottomRightCornerBrush, RelativeSource={RelativeSource TemplatedParent}}" 
-                                      StrokeThickness="1" />
-                            </Canvas>
-
-                            <!-- Right Y Axes (for future multi-axis) -->
+                            <!-- Right Y Axes -->
                             <axesControls:AxisItemsControl x:Name="PART_RightAxesPresenter"
-                                                        Grid.Column="2" Grid.Row="1"
+                                                        Grid.Row="3"
+                                                        Grid.Column="3"
                                                         Panel.ZIndex="1"
                                                         IsHitTestVisible="False"
                                                         ItemsSource="{Binding RightYAxes, RelativeSource={RelativeSource TemplatedParent}}">
@@ -185,9 +244,24 @@
                                 </axesControls:AxisItemsControl.ItemsPanel>
                             </axesControls:AxisItemsControl>
 
-                            <!-- Bottom X Axes -->
+                            <!-- Row 4: 左下角 + 底部坐标轴 + 右下角 -->
+                            <!-- 左下角补线 -->
+                            <Grid x:Name="PART_CornerBottomLeft"
+                                  Grid.Row="4"
+                                  Grid.Column="1"
+                                  Panel.ZIndex="1"
+                                  IsHitTestVisible="False"
+                                  Background="Transparent">
+                                <Border Width="1"
+                                        Height="1"
+                                        HorizontalAlignment="Right"
+                                        VerticalAlignment="Top"
+                                        Background="{Binding BottomLeftCornerBrush, RelativeSource={RelativeSource TemplatedParent}}" />
+                            </Grid>
+                            <!-- 底部坐标轴 -->
                             <axesControls:AxisItemsControl x:Name="PART_BottomAxesPresenter"
-                                                        Grid.Column="1" Grid.Row="2"
+                                                        Grid.Row="4"
+                                                        Grid.Column="2"
                                                         Panel.ZIndex="1"
                                                         IsHitTestVisible="False"
                                                         ItemsSource="{Binding BottomXAxes, RelativeSource={RelativeSource TemplatedParent}}">
@@ -197,6 +271,19 @@
                                     </ItemsPanelTemplate>
                                 </axesControls:AxisItemsControl.ItemsPanel>
                             </axesControls:AxisItemsControl>
+                            <!-- 右下角补线 -->
+                            <Grid x:Name="PART_CornerBottomRight"
+                                  Grid.Row="4"
+                                  Grid.Column="3"
+                                  Panel.ZIndex="1"
+                                  IsHitTestVisible="False"
+                                  Background="Transparent">
+                                <Border Width="1"
+                                        Height="1"
+                                        HorizontalAlignment="Left"
+                                        VerticalAlignment="Top"
+                                        Background="{Binding BottomRightCornerBrush, RelativeSource={RelativeSource TemplatedParent}}" />
+                            </Grid>
                         </Grid>
                     </Border>
                     <ControlTemplate.Triggers>
@@ -208,5 +295,4 @@
             </Setter.Value>
         </Setter>
     </Style>
-
 </ResourceDictionary>

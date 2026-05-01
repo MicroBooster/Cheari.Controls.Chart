@@ -5,8 +5,10 @@ using System.Windows.Shapes;
 
 namespace Cheari.Controls.Annotations;
 
+/// <summary>线条标注，在图表上绘制一条线。</summary>
 public class LineAnnotation : AnnotationBase
 {
+    /// <inheritdoc />
     public override FrameworkElement CreateVisual()
     {
         var canvas = new Canvas();
@@ -21,6 +23,7 @@ public class LineAnnotation : AnnotationBase
         return canvas;
     }
 
+    /// <inheritdoc />
     public override void UpdateVisual(FrameworkElement element)
     {
         if (element is Canvas canvas && canvas.Children.Count > 0 && canvas.Children[0] is Line line)

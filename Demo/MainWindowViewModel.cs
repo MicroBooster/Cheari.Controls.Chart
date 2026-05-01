@@ -1,4 +1,4 @@
-﻿using System.Windows;
+using System.Windows;
 
 namespace Demo
 {
@@ -12,6 +12,11 @@ namespace Demo
         {
             _regionManager = regionManager;
             NavigateCommand = new DelegateCommand<string>(OnNavigate);
+        }
+
+        public void NavigateToHome()
+        {
+            _regionManager.RequestNavigate("ContentRegion", "HomeView");
         }
 
         private void OnNavigate(string viewName)

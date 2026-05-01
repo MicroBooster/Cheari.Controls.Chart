@@ -1,0 +1,40 @@
+<local:ChartDemoViewBase x:Class="Demo.Views.DataExportView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:chart="http://schemas.cheari.com/controls"
+             xmlns:local="clr-namespace:Demo.Views">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <chart:Chart x:Name="DemoChart" Grid.Row="0"
+                     Background="#1A2238" BorderBrush="#49576E" BorderThickness="0"
+                     PlotAreaBackground="#05070B" PlotAreaBorderBrush="#5E708A" PlotAreaBorderThickness="0"
+                     XAxes="{Binding XAxes}" YAxes="{Binding YAxes}" Series="{Binding Series}"
+                     Modifiers="{Binding Modifiers}" EnableAntialiasing="{Binding EnableAntialiasing}"
+                     ShowFps="True" />
+        <Border Grid.Row="1" Background="#2D3748" BorderBrush="#49576E" BorderThickness="0,1,0,0">
+            <Grid Margin="12,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Foreground="White" VerticalAlignment="Center" Text="{Binding Description}" TextWrapping="Wrap" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="20,0,0,0">
+                    <Button Content="📥 CSV" Command="{Binding ExportCsvCommand}"
+                            Width="80" Height="28" Margin="4,0"
+                            Background="#0D7377" Foreground="White" BorderThickness="0" Cursor="Hand" />
+                    <Button Content="📥 JSON" Command="{Binding ExportJsonCommand}"
+                            Width="80" Height="28" Margin="4,0"
+                            Background="#6A1B9A" Foreground="White" BorderThickness="0" Cursor="Hand" />
+                    <Button Content="📋 复制" Command="{Binding CopyDataCommand}"
+                            Width="80" Height="28" Margin="4,0"
+                            Background="#2E4053" Foreground="White" BorderThickness="0" Cursor="Hand" />
+                    <TextBlock Margin="20,0,0,0" Foreground="#00FF00" VerticalAlignment="Center"
+                               Text="{Binding ElementName=DemoChart, Path=Fps, StringFormat=FPS:{0:F1}}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</local:ChartDemoViewBase>

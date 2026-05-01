@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using Cheari.Controls.Annotations;
 using Cheari.Controls.Axes;
 using Cheari.Controls.Axes.Controls;
 using Cheari.Controls.Axes.CoordinateMappers;
@@ -19,6 +20,7 @@ public partial class Chart
     private FrameworkElement? _leftAxesPresenter;
     private FrameworkElement? _rightAxesPresenter;
     private FrameworkElement? _bottomAxesPresenter;
+    private AnnotationsPanel? _annotationsPanel;
     private IAxis[] _topXAxesCache = s_emptyAxes;
     private IAxis[] _bottomXAxesCache = s_emptyAxes;
     private IAxis[] _leftYAxesCache = s_emptyAxes;
@@ -108,31 +110,7 @@ public partial class Chart
         BottomRightCornerBrush = _rightYAxesCache.Length > 0 ? _rightYAxesCache[0].AxisForeground : Brushes.Transparent;
     }
 
-    private void UpdateAxisPresenterOverlap()
-    {
-        ApplyAxisPresenterOffset(_topAxesPresenter, 0, GetAxisOverlapOffset(PlotAreaBorderThickness.Top));
-        ApplyAxisPresenterOffset(_leftAxesPresenter, GetAxisOverlapOffset(PlotAreaBorderThickness.Left), 0);
-        ApplyAxisPresenterOffset(_rightAxesPresenter, -GetAxisOverlapOffset(PlotAreaBorderThickness.Right), 0);
-        ApplyAxisPresenterOffset(_bottomAxesPresenter, 0, -GetAxisOverlapOffset(PlotAreaBorderThickness.Bottom));
-    }
 
-    private static void ApplyAxisPresenterOffset(FrameworkElement? presenter, double x, double y)
-    {
-        if (presenter == null)
-            return;
-
-        presenter.RenderTransform = x == 0 && y == 0
-            ? Transform.Identity
-            : new TranslateTransform(x, y);
-    }
-
-    private static double GetAxisOverlapOffset(double borderThickness)
-    {
-        if (borderThickness <= 0)
-            return 0;
-
-        return (borderThickness / 2.0) + 0.5;
-    }
 
     private void OnSurfaceSizeChanged(object sender, SizeChangedEventArgs e)
     {
@@ -161,6 +139,12 @@ public partial class Chart
         SetAxisControlsPlotAreaSize(_rightAxesPresenter, plotSize);
         SetAxisControlsPlotAreaSize(_topAxesPresenter, plotSize);
         SetAxisControlsPlotAreaSize(_bottomAxesPresenter, plotSize);
+
+        if (_annotationsPanel != null)
+        {
+            _annotationsPanel.PlotAreaWidth = width;
+            _annotationsPanel.PlotAreaHeight = height;
+        }
     }
 
     private static void SetAxisControlsPlotAreaSize(FrameworkElement? presenter, Size plotSize)

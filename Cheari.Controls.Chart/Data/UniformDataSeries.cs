@@ -71,8 +71,12 @@ public class UniformDataSeries<TX, TY> : DataSeriesBase, IUniformDataSeries<TX, 
         }
     }
 
-    /// <summary>获取指定索引处的强类型X值。</summary>
-    public TX GetTypedX(int index) => XSelector(index);
+    /// <summary>
+    /// 获取指定索引处的强类型X值。
+    /// 注意：当启用FifoCapacity滑动窗口时，XSelector的索引需要加上_headIndex偏移量，
+    /// 因为被丢弃的数据点会导致_headIndex递增，从而保证X值与实际追加顺序一致。
+    /// </summary>
+    public TX GetTypedX(int index) => XSelector(index + _headIndex);
 
     /// <summary>获取指定索引处的强类型Y值。</summary>
     public TY GetTypedY(int index) => _ringBuffer[index];
@@ -123,7 +127,7 @@ public class UniformDataSeries<TX, TY> : DataSeriesBase, IUniformDataSeries<TX, 
 
             for (int i = 0; i < count; i++)
             {
-                xArr[i] = (float)_xToDouble(XSelector(i));
+                xArr[i] = (float)_xToDouble(XSelector(i + _headIndex));
                 yArr[i] = (float)_yToDouble(yAccess[i]);
             }
 

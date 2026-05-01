@@ -1,4 +1,5 @@
 using System.Collections.Specialized;
+using System.ComponentModel;
 using System.Windows.Media;
 using Cheari.Controls.Core;
 
@@ -31,7 +32,7 @@ namespace Cheari.Controls.Data;
     /// series.Append(Math.Sin(0));
     /// </code>
     /// </example>
-public interface IDataSeries : INotifyCollectionChanged
+public interface IDataSeries : INotifyCollectionChanged, INotifyPropertyChanged
 {
     /// <summary>
     /// 获取数据点数量。
@@ -92,6 +93,11 @@ public interface IDataSeries : INotifyCollectionChanged
     /// 实现方可以缓存该值，并在数据变更时失效。
     /// </summary>
     DataRange YRange { get; }
+
+    /// <summary>
+    /// 获取或设置附加信息，用于在 Legend 中显示曲线的额外数据。
+    /// </summary>
+    object? Tag { get; set; }
 
     /// <summary>
     /// 范围缓存可能发生变化时触发。

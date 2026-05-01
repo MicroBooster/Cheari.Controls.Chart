@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
+using System.ComponentModel;
 using System.Windows;
 using Cheari.Controls.Data;
 using Cheari.Controls.Legend;
@@ -88,6 +89,12 @@ public partial class Chart
             RequestRedrawFromAnyThread();
     }
 
+    private void OnSeriesPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(IRenderableSeries.IsVisible))
+            MarkDirty();
+    }
+
     private void SubscribeToSeries(IEnumerable<IRenderableSeries> seriesCollection)
     {
         foreach (var series in seriesCollection)
@@ -96,6 +103,9 @@ public partial class Chart
 
     private void SubscribeToSeries(IRenderableSeries series)
     {
+        if (series is INotifyPropertyChanged npc)
+            npc.PropertyChanged += OnSeriesPropertyChanged;
+
         if (series.DataSeries == null)
             return;
 
@@ -118,6 +128,9 @@ public partial class Chart
 
     private void UnsubscribeFromSeries(IRenderableSeries series)
     {
+        if (series is INotifyPropertyChanged npc)
+            npc.PropertyChanged -= OnSeriesPropertyChanged;
+
         if (series.DataSeries == null)
             return;
 
@@ -146,5 +159,14 @@ public partial class Chart
         }
 
         _dataSeriesSubscriptions.Clear();
+
+        if (Series != null)
+        {
+            foreach (var series in Series)
+            {
+                if (series is INotifyPropertyChanged npc)
+                    npc.PropertyChanged -= OnSeriesPropertyChanged;
+            }
+        }
     }
 }

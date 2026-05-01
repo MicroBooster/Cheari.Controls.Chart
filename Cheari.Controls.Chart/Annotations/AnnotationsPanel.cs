@@ -8,54 +8,65 @@ using Cheari.Controls.Core;
 
 namespace Cheari.Controls.Annotations;
 
+/// <summary>标注面板，负责标注元素在绘图区域中的布局和渲染。</summary>
 public class AnnotationsPanel : Canvas
 {
+    /// <summary>标识 <see cref="Annotations"/> 依赖属性。</summary>
     public static readonly DependencyProperty AnnotationsProperty =
         DependencyProperty.Register(nameof(Annotations), typeof(ObservableCollection<IAnnotation>),
             typeof(AnnotationsPanel), new PropertyMetadata(null, OnAnnotationsChanged));
 
+    /// <summary>标识 <see cref="XAxes"/> 依赖属性。</summary>
     public static readonly DependencyProperty XAxesProperty =
         DependencyProperty.Register(nameof(XAxes), typeof(ObservableCollection<IAxis>),
             typeof(AnnotationsPanel), new PropertyMetadata(null, OnAxesChanged));
 
+    /// <summary>标识 <see cref="YAxes"/> 依赖属性。</summary>
     public static readonly DependencyProperty YAxesProperty =
         DependencyProperty.Register(nameof(YAxes), typeof(ObservableCollection<IAxis>),
             typeof(AnnotationsPanel), new PropertyMetadata(null, OnAxesChanged));
 
+    /// <summary>标识 <see cref="PlotAreaWidth"/> 依赖属性。</summary>
     public static readonly DependencyProperty PlotAreaWidthProperty =
         DependencyProperty.Register(nameof(PlotAreaWidth), typeof(double), typeof(AnnotationsPanel),
             new PropertyMetadata(0.0, OnLayoutChanged));
 
+    /// <summary>标识 <see cref="PlotAreaHeight"/> 依赖属性。</summary>
     public static readonly DependencyProperty PlotAreaHeightProperty =
         DependencyProperty.Register(nameof(PlotAreaHeight), typeof(double), typeof(AnnotationsPanel),
             new PropertyMetadata(0.0, OnLayoutChanged));
 
     private readonly Dictionary<IAnnotation, FrameworkElement> _visualMap = new();
 
+    /// <summary>获取或设置标注集合。</summary>
     public ObservableCollection<IAnnotation>? Annotations
     {
         get => (ObservableCollection<IAnnotation>?)GetValue(AnnotationsProperty);
         set => SetValue(AnnotationsProperty, value);
     }
 
+    /// <summary>获取或设置X轴集合。</summary>
     public ObservableCollection<IAxis>? XAxes
     {
         get => (ObservableCollection<IAxis>?)GetValue(XAxesProperty);
         set => SetValue(XAxesProperty, value);
     }
 
+    /// <summary>获取或设置Y轴集合。</summary>
     public ObservableCollection<IAxis>? YAxes
     {
         get => (ObservableCollection<IAxis>?)GetValue(YAxesProperty);
         set => SetValue(YAxesProperty, value);
     }
 
+    /// <summary>获取或设置绘图区域宽度。</summary>
     public double PlotAreaWidth
     {
         get => (double)GetValue(PlotAreaWidthProperty);
         set => SetValue(PlotAreaWidthProperty, value);
     }
 
+    /// <summary>获取或设置绘图区域高度。</summary>
     public double PlotAreaHeight
     {
         get => (double)GetValue(PlotAreaHeightProperty);
@@ -298,6 +309,7 @@ public class AnnotationsPanel : Canvas
         return size - mapper.DataToScreen(value, range, size);
     }
 
+    /// <inheritdoc />
     protected override Size ArrangeOverride(Size arrangeSize)
     {
         LayoutAll();

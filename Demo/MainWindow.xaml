@@ -31,6 +31,7 @@
                 <dxa:AccordionItem Header="蜡烛图" Tag="OhlcChartView" />
             </dxa:AccordionItem>
             <dxa:AccordionItem Header="高级功能">
+                <dxa:AccordionItem Header="图例演示" Tag="LegendDemoView" />
                 <dxa:AccordionItem Header="四轴演示" Tag="AxisShowcaseView" />
                 <dxa:AccordionItem Header="多轴" Tag="MultiAxisView" />
                 <dxa:AccordionItem Header="对数轴" Tag="LogAxisView" />

@@ -6,10 +6,12 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using Cheari.Controls.Annotations;
 using Cheari.Controls.Axes;
 using Cheari.Controls.Axes.Controls;
 using Cheari.Controls.Core;
 using Cheari.Controls.Data;
+using Cheari.Controls.Legend;
 using Cheari.Controls.Modifiers;
 using Cheari.Controls.Rendering;
 using Cheari.Controls.Rendering.Context;
@@ -221,6 +223,18 @@ public partial class Chart : Control
         set => SetValue(ModifiersProperty, value);
     }
 
+    /// <summary>标识 <see cref="Legend"/> 依赖属性。</summary>
+    public static readonly DependencyProperty LegendProperty =
+        DependencyProperty.Register(nameof(Legend), typeof(ILegend), typeof(Chart),
+            new PropertyMetadata(null, OnLegendChanged));
+
+    /// <summary>获取或设置图表图例。</summary>
+    public ILegend? Legend
+    {
+        get => (ILegend?)GetValue(LegendProperty);
+        set => SetValue(LegendProperty, value);
+    }
+
     /// <summary>标识 <see cref="RendererPreference"/> 依赖属性。</summary>
     public static readonly DependencyProperty RendererPreferenceProperty =
         DependencyProperty.Register(nameof(RendererPreference), typeof(ChartRendererPreference), typeof(Chart),
@@ -310,6 +324,14 @@ public partial class Chart : Control
                 e.OldValue as ObservableCollection<IChartModifier>,
                 e.NewValue as ObservableCollection<IChartModifier>);
             chart.MarkDirty();
+        }
+    }
+
+    private static void OnLegendChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is Chart chart)
+        {
+            chart.UpdateLegendSeries();
         }
     }
 
@@ -712,6 +734,14 @@ public partial class Chart : Control
     {
         EnsureDefaultModifiers();
         RefreshModifierContexts();
+    }
+
+    private void UpdateLegendSeries()
+    {
+        var legend = Legend;
+        var series = Series;
+        if (legend != null && series != null)
+            legend.SetSeries(series);
     }
 
     #endregion

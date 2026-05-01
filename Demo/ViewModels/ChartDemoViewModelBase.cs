@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using Cheari.Controls;
 using Cheari.Controls.Axes;
 using Cheari.Controls.Core;
+using Cheari.Controls.Legend;
 using Cheari.Controls.Modifiers;
 using Cheari.Controls.Series;
 using Demo.Helpers;
@@ -39,6 +40,8 @@ public class ChartDemoViewModelBase : BindableBase
         get => _rendererPreference;
         set => SetProperty(ref _rendererPreference, value);
     }
+
+    public ILegend? Legend { get; protected set; }
 
     /// <summary>
     /// 由导航页在进入激活状态时调用，用于准备图表数据和实时资源。

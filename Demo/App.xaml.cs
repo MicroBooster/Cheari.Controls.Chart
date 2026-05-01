@@ -35,6 +35,7 @@ namespace Demo
             containerRegistry.RegisterForNavigation<MultiAxisView, MultiAxisViewModel>();
             containerRegistry.RegisterForNavigation<LogAxisView, LogAxisViewModel>();
             containerRegistry.RegisterForNavigation<FifoChartView, FifoChartViewModel>();
+            containerRegistry.RegisterForNavigation<LegendDemoView, LegendDemoViewModel>();
             containerRegistry.RegisterForNavigation<SoftwareBackendView, SoftwareBackendViewModel>();
             containerRegistry.RegisterForNavigation<HardwareOnlyDiagnosticsView, HardwareOnlyDiagnosticsViewModel>();
         }

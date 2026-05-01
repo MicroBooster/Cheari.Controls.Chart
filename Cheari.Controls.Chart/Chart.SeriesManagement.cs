@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Windows;
 using Cheari.Controls.Data;
+using Cheari.Controls.Legend;
 using Cheari.Controls.Series;
 
 namespace Cheari.Controls;
@@ -24,13 +25,14 @@ public partial class Chart
             }
 
             if (e.NewValue is ObservableCollection<IRenderableSeries> newSeries)
-            {
-                newSeries.CollectionChanged += chart.OnSeriesCollectionChanged;
-                chart.SubscribeToSeries(newSeries);
-            }
+        {
+            newSeries.CollectionChanged += chart.OnSeriesCollectionChanged;
+            chart.SubscribeToSeries(newSeries);
+        }
 
-            chart.UpdateRenderContext();
-            chart.MarkDirty();
+        chart.UpdateLegendSeries();
+        chart.UpdateRenderContext();
+        chart.MarkDirty();
         }
     }
 
@@ -42,6 +44,7 @@ public partial class Chart
             if (Series != null)
                 SubscribeToSeries(Series);
 
+            UpdateLegendSeries();
             MarkDirty();
             return;
         }
@@ -63,6 +66,7 @@ public partial class Chart
             SubscribeToSeries(Series);
         }
 
+        UpdateLegendSeries();
         MarkDirty();
     }
 

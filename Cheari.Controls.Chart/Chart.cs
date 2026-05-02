@@ -362,37 +362,25 @@ public partial class Chart : Control
     {
         if (d is Chart chart)
         {
-            // 清理旧的 LegendControl 监听
             if (chart._currentLegendControl != null)
             {
-                // 移除旧 Legend 监听
                 if (chart._currentLegendControl.Legend is INotifyPropertyChanged oldNpc)
                     oldNpc.PropertyChanged -= chart.OnLegendPropertyChanged;
 
-                // 移除旧 LegendControl 从视觉树
                 if (chart._currentLegendControl.Parent is Panel parentPanel)
-                {
                     parentPanel.Children.Remove(chart._currentLegendControl);
-                }
             }
 
-            // 设置新的 LegendControl
             chart._currentLegendControl = e.NewValue as LegendControl;
 
             if (chart._currentLegendControl != null)
             {
-                // 如果 LegendControl 还没有设置 Legend，就创建一个新的
-                ILegend legend = chart._currentLegendControl.Legend ?? new ChartLegend();
-                // 只有在 LegendControl 的 Legend 为 null 时才设置它
                 if (chart._currentLegendControl.Legend == null)
-                {
-                    chart._currentLegendControl.Legend = legend;
-                }
-                // 监听 Legend 的 PropertyChanged 事件
-                if (legend is INotifyPropertyChanged newNpc)
+                    chart._currentLegendControl.Legend = new ChartLegend();
+
+                if (chart._currentLegendControl.Legend is INotifyPropertyChanged newNpc)
                     newNpc.PropertyChanged += chart.OnLegendPropertyChanged;
 
-                // 设置容器引用
                 chart._currentLegendControl.SetContainers(chart._internalLegendGrid, chart._chartGrid);
             }
 
@@ -442,6 +430,8 @@ public partial class Chart : Control
 
     private static void OnPlotAreaBorderThicknessChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
+        if (d is Chart chart)
+            chart.MarkDirty();
     }
 
     /// <summary>标识 <see cref="IsStreaming"/> 依赖属性。</summary>
@@ -460,10 +450,39 @@ public partial class Chart : Control
         set => SetValue(IsStreamingProperty, value);
     }
 
+    /// <summary>标识 <see cref="Title"/> 依赖属性。</summary>
+    public static readonly DependencyProperty TitleProperty =
+        DependencyProperty.Register(nameof(Title), typeof(string), typeof(Chart),
+            new PropertyMetadata(string.Empty, OnTitleChanged));
+
+    /// <summary>获取或设置图表的标题文本。设置为非空值时在图表顶部居中显示。</summary>
+    public string Title
+    {
+        get => (string)GetValue(TitleProperty);
+        set => SetValue(TitleProperty, value);
+    }
+
     private static void OnIsStreamingChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         if (d is Chart chart)
             chart.UpdateSurfaceRefreshMode();
+    }
+
+    private static void OnTitleChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is Chart chart)
+            chart.SyncTitleVisibility();
+    }
+
+    /// <summary>同步 PART_Title 的可见性状态，确保与 Title 属性一致。</summary>
+    private void SyncTitleVisibility()
+    {
+        if (GetTemplateChild("PART_Title") is System.Windows.Controls.TextBlock titleBlock)
+        {
+            titleBlock.Visibility = string.IsNullOrEmpty(Title)
+                ? System.Windows.Visibility.Collapsed
+                : System.Windows.Visibility.Visible;
+        }
     }
 
     #endregion
@@ -495,6 +514,7 @@ public partial class Chart : Control
 
     #region 方法
 
+    /// <summary>标记图表为脏状态，触发下一次渲染循环。</summary>
     private void MarkDirty()
     {
         _isDirty = true;
@@ -513,8 +533,25 @@ public partial class Chart : Control
 
         _invalidatePending = true;
         surface.Invalidate();
+        InvalidateVisual();
     }
 
+    /// <summary>强制立即同步渲染图表和图例。</summary>
+    internal void ForceRedraw()
+    {
+        var surface = _surface;
+        if (surface == null)
+            return;
+
+        _isDirty = true;
+        _invalidatePending = false;
+        surface.Invalidate();
+        InvalidateVisual();
+        InvalidateMeasure();
+        UpdateLayout();
+    }
+
+    /// <summary>控件加载完成回调：初始化默认轴、修饰器和渲染状态。</summary>
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         EnsureDefaultAxes();
@@ -528,23 +565,15 @@ public partial class Chart : Control
         YAxisGroup?.Register(this);
         MarkDirty();
 
-        // 在控件完全加载后，重新处理 LegendControl
+        // 控件加载完成后，确保图例位置正确（布局已完成）
         if (_currentLegendControl != null && _currentLegendControl.Legend != null)
         {
-            // 移除旧的监听（如果有）
-            if (_currentLegendControl.Legend is INotifyPropertyChanged oldNpc)
-                oldNpc.PropertyChanged -= OnLegendPropertyChanged;
-            
-            // 重新添加监听
-            if (_currentLegendControl.Legend is INotifyPropertyChanged newNpc)
-                newNpc.PropertyChanged += OnLegendPropertyChanged;
-            
-            // 重新更新 Legend 系列和位置
             UpdateLegendSeries();
             _currentLegendControl.UpdatePosition();
         }
     }
 
+    /// <summary>控件卸载回调：注销轴组、清理修饰器和渲染状态。</summary>
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
         XAxisGroup?.Unregister(this);
@@ -553,17 +582,20 @@ public partial class Chart : Control
         CleanupRenderingState();
     }
 
+    /// <summary>DrawingSurface 内容加载回调：初始化渲染器。</summary>
     private void OnSurfaceLoadContent(object? sender, DrawingSurfaceEventArgs e)
     {
         InitializeRendererForCurrentPreference(e);
         SignalViewportChanged();
     }
 
+    /// <summary>DrawingSurface 内容卸载回调：清理渲染状态。</summary>
     private void OnSurfaceUnloadContent(object? sender, DrawingSurfaceEventArgs e)
     {
         CleanupRenderingState();
     }
 
+    /// <summary>DrawingSurface 绘制回调：执行一次完整的图表渲染。</summary>
     private void OnSurfaceDraw(object? sender, DrawEventArgs e)
     {
         if (_surface == null || _renderer == null)
@@ -691,6 +723,7 @@ public partial class Chart : Control
         UpdateLegendSeries();
         UpdateRenderContext();
         UpdateSurfaceVisualState();
+        SyncTitleVisibility();
         SignalViewportChanged();
     }
 
@@ -748,6 +781,7 @@ public partial class Chart : Control
         ForwardMouseEvent(e);
     }
 
+    /// <summary>将鼠标事件转发给所有已注册的修饰器。</summary>
     private void ForwardMouseEvent(MouseEventArgs e)
     {
         if (Modifiers == null)
@@ -789,6 +823,7 @@ public partial class Chart : Control
         }
     }
 
+    /// <summary>判断给定点是否在 PlotArea 区域内。</summary>
     private bool IsPointInPlotArea(Point chartPoint)
     {
         if (_surface == null)
@@ -801,12 +836,18 @@ public partial class Chart : Control
             && surfacePoint.Y <= _surface.ActualHeight;
     }
 
+    /// <summary>获取当前 XRange（通过委托提供给 RenderContext）。</summary>
     private DataRange GetCurrentXRange() => XRange;
+    /// <summary>获取当前 YRange（通过委托提供给 RenderContext）。</summary>
     private DataRange GetCurrentYRange() => YRange;
+    /// <summary>获取当前 Series 列表（通过委托提供给 RenderContext）。</summary>
     private IList<IRenderableSeries> GetCurrentSeriesList() => Series is not null ? Series : s_emptySeries;
+    /// <summary>获取当前 XAxes 列表（通过委托提供给 RenderContext）。</summary>
     private IList<IAxis> GetCurrentXAxesList() => XAxes is not null ? XAxes : s_emptyAxes;
+    /// <summary>获取当前 YAxes 列表（通过委托提供给 RenderContext）。</summary>
     private IList<IAxis> GetCurrentYAxesList() => YAxes is not null ? YAxes : s_emptyAxes;
 
+    /// <summary>应用 RenderContext 产生的范围变更。</summary>
     private void ApplyRenderContextRangeChange(DataRange xRange, DataRange yRange)
     {
         XRange = xRange;
@@ -858,12 +899,14 @@ public partial class Chart : Control
         SyncUntouchedAxesToDefaultRange(YAxes, touchedYAxisIds, DefaultYAxisId);
     }
 
+    /// <summary>更新修饰器集合，确保默认修饰器存在并刷新上下文。</summary>
     private void UpdateModifiers()
     {
         EnsureDefaultModifiers();
         RefreshModifierContexts();
     }
 
+    /// <summary>更新图例的系列数据。</summary>
     private void UpdateLegendSeries()
     {
         var legend = Legend;
@@ -872,6 +915,9 @@ public partial class Chart : Control
             legend.Legend.SetSeries(series);
     }
 
+    /// <summary>
+    /// RenderContext 范围变更的链式处理：应用范围变更并通知轴组。
+    /// </summary>
     private void ChainedRangeChanged(DataRange xRange, DataRange yRange)
     {
         ApplyRenderContextRangeChange(xRange, yRange);
@@ -879,6 +925,9 @@ public partial class Chart : Control
         YAxisGroup?.NotifyRangeChanged(this, DefaultYAxisId, yRange);
     }
 
+    /// <summary>
+    /// RenderContext 轴范围变更的链式处理：应用变更并通知对应轴组。
+    /// </summary>
     private void ChainedAxisRangeChanged(string axisId, DataRange range)
     {
         ApplyRenderContextAxisRangeChange(axisId, range);

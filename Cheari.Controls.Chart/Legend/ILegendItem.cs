@@ -20,6 +20,11 @@ public interface ILegendItem : INotifyPropertyChanged
     Color Stroke { get; }
 
     /// <summary>
+    /// 获取图例项的填充颜色。对于面积图和柱状图，这是主要颜色。
+    /// </summary>
+    Color Fill { get; }
+
+    /// <summary>
     /// 获取关联的系列。
     /// </summary>
     IRenderableSeries Series { get; }

@@ -1,8 +1,10 @@
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using Cheari.Controls.Controls;
 using Cheari.Controls.Core;
 using Cheari.Controls.Series;
 
@@ -17,6 +19,7 @@ public class LegendControl : Control
     private Grid? _internalLegendGrid;
     private Grid? _chartGrid;
     private bool _updatingPosition;
+    private readonly List<(ILegendItem item, PropertyChangedEventHandler handler)> _itemHandlers = [];
 
     static LegendControl()
     {
@@ -59,6 +62,13 @@ public class LegendControl : Control
     public static readonly DependencyProperty LegendProperty =
         DependencyProperty.Register(nameof(Legend), typeof(ILegend), typeof(LegendControl),
             new FrameworkPropertyMetadata(null, OnLegendChanged));
+
+    /// <summary>
+    /// 标识 LegendSpacing 依赖属性。
+    /// </summary>
+    public static readonly DependencyProperty LegendSpacingProperty =
+        DependencyProperty.Register(nameof(LegendSpacing), typeof(double), typeof(LegendControl),
+            new FrameworkPropertyMetadata(8.0, FrameworkPropertyMetadataOptions.AffectsMeasure, OnLegendSpacingChanged));
 
     /// <summary>
     /// 获取或设置图例的位置。
@@ -106,6 +116,15 @@ public class LegendControl : Control
     }
 
     /// <summary>
+    /// 获取或设置图例的间距大小（像素）。
+    /// </summary>
+    public double LegendSpacing
+    {
+        get => (double)GetValue(LegendSpacingProperty);
+        set => SetValue(LegendSpacingProperty, value);
+    }
+
+    /// <summary>
     /// 当应用模板时调用，重建视觉元素。
     /// </summary>
     public override void OnApplyTemplate()
@@ -145,12 +164,13 @@ public class LegendControl : Control
     {
         if (d is LegendControl control)
         {
-            // 同步到 Legend 对象
             if (control.Legend != null && e.NewValue is LegendPosition newPos)
             {
                 control.Legend.Position = newPos;
             }
+            control.UpdatePosition();
             control.RebuildVisuals(control._lastLegend);
+            control.ApplyDirectionalMargin();
         }
     }
 
@@ -171,11 +191,12 @@ public class LegendControl : Control
     {
         if (d is LegendControl control)
         {
-            // 同步到 Legend 对象
             if (control.Legend != null && e.NewValue is HorizontalAlignment newAlign)
             {
                 control.Legend.HorizontalAlignment = newAlign;
             }
+            control.SetValue(FrameworkElement.HorizontalAlignmentProperty, e.NewValue);
+            control.ApplyDirectionalMargin();
         }
     }
 
@@ -183,11 +204,12 @@ public class LegendControl : Control
     {
         if (d is LegendControl control)
         {
-            // 同步到 Legend 对象
             if (control.Legend != null && e.NewValue is VerticalAlignment newAlign)
             {
                 control.Legend.VerticalAlignment = newAlign;
             }
+            control.SetValue(FrameworkElement.VerticalAlignmentProperty, e.NewValue);
+            control.ApplyDirectionalMargin();
         }
     }
 
@@ -196,12 +218,18 @@ public class LegendControl : Control
         if (d is not LegendControl control) return;
 
         if (e.OldValue is ILegend oldLegend)
+        {
             oldLegend.ItemsChanged -= control.OnLegendItemsChanged;
+            if (oldLegend is INotifyPropertyChanged oldNpc)
+                oldNpc.PropertyChanged -= control.OnLegendPropertyChanged;
+        }
 
         if (e.NewValue is ILegend newLegend)
         {
             newLegend.ItemsChanged += control.OnLegendItemsChanged;
-            // 将当前 LegendControl 的属性值同步到新的 Legend 对象
+            if (newLegend is INotifyPropertyChanged newNpc)
+                newNpc.PropertyChanged += control.OnLegendPropertyChanged;
+
             newLegend.Position = control.Position;
             newLegend.Orientation = control.Orientation;
             newLegend.HorizontalAlignment = control.HorizontalAlignment;
@@ -212,15 +240,98 @@ public class LegendControl : Control
         control.RebuildVisuals(control._lastLegend);
     }
 
+    private void OnLegendPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (sender is not ILegend legend) return;
+        switch (e.PropertyName)
+        {
+            case nameof(ILegend.HorizontalAlignment):
+                SetValue(HorizontalAlignmentProperty, legend.HorizontalAlignment);
+                SetValue(FrameworkElement.HorizontalAlignmentProperty, legend.HorizontalAlignment);
+                ApplyDirectionalMargin();
+                break;
+            case nameof(ILegend.VerticalAlignment):
+                SetValue(VerticalAlignmentProperty, legend.VerticalAlignment);
+                SetValue(FrameworkElement.VerticalAlignmentProperty, legend.VerticalAlignment);
+                ApplyDirectionalMargin();
+                break;
+        }
+    }
+
     private void OnLegendItemsChanged() => RebuildVisuals(_lastLegend);
+
+    private static void OnLegendSpacingChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is LegendControl control)
+            control.ApplyDirectionalMargin();
+    }
+
+    private void ApplyDirectionalMargin()
+    {
+        var pos = Position;
+        var spacing = LegendSpacing;
+        var h = HorizontalAlignment;
+        var v = VerticalAlignment;
+
+        double l = 0, t = 0, r = 0, b = 0;
+
+        switch (pos)
+        {
+            case LegendPosition.InternalTop:
+                t = spacing;
+                if (h == HorizontalAlignment.Left || h == HorizontalAlignment.Stretch)
+                    l = spacing;
+                if (h == HorizontalAlignment.Right || h == HorizontalAlignment.Stretch)
+                    r = spacing;
+                break;
+            case LegendPosition.InternalBottom:
+                b = spacing;
+                if (h == HorizontalAlignment.Left || h == HorizontalAlignment.Stretch)
+                    l = spacing;
+                if (h == HorizontalAlignment.Right || h == HorizontalAlignment.Stretch)
+                    r = spacing;
+                break;
+            case LegendPosition.InternalLeft:
+                l = spacing;
+                if (v == VerticalAlignment.Top || v == VerticalAlignment.Stretch)
+                    t = spacing;
+                if (v == VerticalAlignment.Bottom || v == VerticalAlignment.Stretch)
+                    b = spacing;
+                break;
+            case LegendPosition.InternalRight:
+                r = spacing;
+                if (v == VerticalAlignment.Top || v == VerticalAlignment.Stretch)
+                    t = spacing;
+                if (v == VerticalAlignment.Bottom || v == VerticalAlignment.Stretch)
+                    b = spacing;
+                break;
+            case LegendPosition.ExternalTop:
+                b = spacing;
+                break;
+            case LegendPosition.ExternalBottom:
+                t = spacing;
+                break;
+            case LegendPosition.ExternalLeft:
+                r = spacing;
+                break;
+            case LegendPosition.ExternalRight:
+                l = spacing;
+                break;
+        }
+
+        Margin = new Thickness(l, t, r, b);
+    }
 
     private void RebuildVisuals(ILegend? legend)
     {
         if (GetTemplateChild("PART_ItemsHost") is not StackPanel host)
         {
-            // 如果还没有应用模板，我们稍后再试
             return;
         }
+
+        foreach (var (item, handler) in _itemHandlers)
+            item.PropertyChanged -= handler;
+        _itemHandlers.Clear();
 
         var orientation = Orientation;
         host.Orientation = orientation == LegendOrientation.Vertical
@@ -236,7 +347,7 @@ public class LegendControl : Control
             host.Children.Add(CreateLegendItemRow(item, orientation));
     }
 
-    private static FrameworkElement CreateLegendItemRow(ILegendItem item, LegendOrientation orientation)
+    private FrameworkElement CreateLegendItemRow(ILegendItem item, LegendOrientation orientation)
     {
         bool isHorizontal = orientation == LegendOrientation.Horizontal;
 
@@ -260,28 +371,6 @@ public class LegendControl : Control
             Foreground = new SolidColorBrush(Color.FromRgb(212, 212, 212))
         };
 
-        item.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(ILegendItem.IsVisible))
-            {
-                label.Dispatcher.Invoke(() =>
-                {
-                    label.Opacity = item.IsVisible ? 1.0 : 0.35;
-                });
-            }
-            else if (e.PropertyName == nameof(ILegendItem.Stroke))
-            {
-                icon.Dispatcher.Invoke(() =>
-                {
-                    LegendIconHelper.UpdateIconColor(icon, item.Stroke);
-                });
-            }
-        };
-
-        label.Opacity = item.IsVisible ? 1.0 : 0.35;
-
-        row.Children.Add(label);
-
         var tagLabel = new TextBlock
         {
             Text = item.Tag != null ? $" ({item.Tag})" : string.Empty,
@@ -292,18 +381,43 @@ public class LegendControl : Control
             Visibility = item.Tag != null ? Visibility.Visible : Visibility.Collapsed
         };
 
-        item.PropertyChanged += (_, e) =>
+        PropertyChangedEventHandler handler = null!;
+        handler = (_, e) =>
         {
-            if (e.PropertyName == nameof(ILegendItem.Tag))
+            if (!icon.Dispatcher.CheckAccess())
             {
-                tagLabel.Dispatcher.Invoke(() =>
-                {
-                    tagLabel.Text = item.Tag != null ? $" ({item.Tag})" : string.Empty;
-                    tagLabel.Visibility = item.Tag != null ? Visibility.Visible : Visibility.Collapsed;
-                });
+                icon.Dispatcher.BeginInvoke(handler, new object?[] { null, e });
+                return;
+            }
+
+            if (e.PropertyName == nameof(ILegendItem.IsVisible))
+            {
+                var opacity = item.IsVisible ? 1.0 : 0.4;
+                icon.Opacity = opacity;
+                label.Opacity = opacity;
+                label.Foreground = item.IsVisible
+                    ? new SolidColorBrush(Color.FromRgb(212, 212, 212))
+                    : new SolidColorBrush(Color.FromRgb(120, 120, 130));
+            }
+            else if (e.PropertyName == nameof(ILegendItem.Stroke) || e.PropertyName == "Fill")
+            {
+                LegendIconHelper.UpdateIconColor(icon, item.Stroke);
+            }
+            else if (e.PropertyName == nameof(ILegendItem.Tag))
+            {
+                tagLabel.Text = item.Tag != null ? $" ({item.Tag})" : string.Empty;
+                tagLabel.Visibility = item.Tag != null ? Visibility.Visible : Visibility.Collapsed;
             }
         };
 
+        item.PropertyChanged += handler;
+        _itemHandlers.Add((item, handler));
+
+        var opacity = item.IsVisible ? 1.0 : 0.4;
+        icon.Opacity = opacity;
+        label.Opacity = opacity;
+
+        row.Children.Add(label);
         row.Children.Add(tagLabel);
 
         row.MouseLeftButtonDown += (_, _) =>
@@ -330,56 +444,73 @@ public class LegendControl : Control
             PlacementTarget = placementTarget,
             Placement = PlacementMode.Bottom,
             IsOpen = true,
-            StaysOpen = false,
+            StaysOpen = true,
             AllowsTransparency = true
         };
 
-        var colorPanel = new Border
+        var editor = new ColorEditor
         {
-            Background = new SolidColorBrush(Color.FromRgb(26, 34, 56)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(73, 87, 110)),
-            BorderThickness = new Thickness(1),
-            Padding = new Thickness(4)
+            SelectedColor = item.Stroke,
+            PreviousColor = item.Stroke,
+            ShowAlpha = true,
+            ShowPresets = true
         };
 
-        var grid = new UniformGrid
+        editor.OnClose = confirmed =>
         {
-            Columns = 6,
-            Width = 180,
-            Height = 120
-        };
-
-        var presetColors = new[]
-        {
-            Colors.Red, Colors.Orange, Colors.Yellow, Colors.Green, Colors.Cyan, Colors.Blue,
-            Colors.Purple, Colors.Pink, Colors.White, Colors.Gray, Colors.LightBlue, Colors.LightGreen,
-            Colors.DarkRed, Colors.DarkOrange, Color.FromRgb(139, 119, 0), Colors.DarkGreen, Colors.DarkCyan, Colors.DarkBlue,
-            Color.FromRgb(148, 0, 211), Color.FromRgb(238, 18, 137), Colors.Black, Colors.LightGray, Colors.SkyBlue, Colors.LimeGreen
-        };
-
-        foreach (var color in presetColors)
-        {
-            var colorButton = new Button
+            if (confirmed)
             {
-                Width = 24,
-                Height = 24,
-                Margin = new Thickness(2),
-                Background = new SolidColorBrush(color),
-                BorderBrush = color == item.Stroke ? new SolidColorBrush(Colors.White) : null,
-                BorderThickness = color == item.Stroke ? new Thickness(2) : new Thickness(1)
-            };
-
-            colorButton.Click += (_, _) =>
-            {
+                var color = editor.SelectedColor;
                 series.Stroke = color;
-                popup.IsOpen = false;
-            };
 
-            grid.Children.Add(colorButton);
+                if (series is Series.Types.AreaRenderableSeries areaSeries)
+                    areaSeries.Fill = Color.FromArgb(
+                        (byte)(color.A * areaSeries.FillOpacity),
+                        color.R, color.G, color.B);
+                else if (series is Series.Types.BarRenderableSeries barSeries)
+                    barSeries.Fill = Color.FromArgb(
+                        (byte)(color.A * 0.8),
+                        color.R, color.G, color.B);
+
+                var chart = FindParentChart(placementTarget);
+                var legendControl = FindParentLegend(placementTarget);
+                legendControl?.RefreshVisuals();
+                chart?.ForceRedraw();
+            }
+            popup.IsOpen = false;
+        };
+
+        popup.Child = editor;
+    }
+
+    private static Chart? FindParentChart(DependencyObject? element)
+    {
+        while (element != null)
+        {
+            if (element is Chart chart)
+                return chart;
+            element = VisualTreeHelper.GetParent(element);
         }
+        return null;
+    }
 
-        colorPanel.Child = grid;
-        popup.Child = colorPanel;
+    private static LegendControl? FindParentLegend(DependencyObject? element)
+    {
+        while (element != null)
+        {
+            if (element is LegendControl legend)
+                return legend;
+            element = VisualTreeHelper.GetParent(element);
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// 强制重建图例视觉元素。
+    /// </summary>
+    internal void RefreshVisuals()
+    {
+        RebuildVisuals(_lastLegend);
     }
 
     /// <summary>
@@ -425,8 +556,9 @@ public class LegendControl : Control
             else
                 ApplyExternalPosition(position);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            System.Diagnostics.Debug.WriteLine($"[LegendControl] UpdatePosition failed: {ex.Message}");
         }
         finally
         {

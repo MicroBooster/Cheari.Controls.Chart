@@ -26,17 +26,20 @@ public partial class Chart
             }
 
             if (e.NewValue is ObservableCollection<IRenderableSeries> newSeries)
-        {
-            newSeries.CollectionChanged += chart.OnSeriesCollectionChanged;
-            chart.SubscribeToSeries(newSeries);
-        }
+            {
+                newSeries.CollectionChanged += chart.OnSeriesCollectionChanged;
+                chart.SubscribeToSeries(newSeries);
+            }
 
-        chart.UpdateLegendSeries();
-        chart.UpdateRenderContext();
-        chart.MarkDirty();
+            chart.UpdateLegendSeries();
+            chart.UpdateRenderContext();
+            chart.MarkDirty();
         }
     }
 
+    /// <summary>
+    /// 处理系列集合的变更通知，包括添加、移除、重置等操作。
+    /// </summary>
     private void OnSeriesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         if (e.Action == NotifyCollectionChangedAction.Reset)
@@ -62,15 +65,11 @@ public partial class Chart
                 SubscribeToSeries(series);
         }
 
-        if (e.Action == NotifyCollectionChangedAction.Reset && Series != null)
-        {
-            SubscribeToSeries(Series);
-        }
-
         UpdateLegendSeries();
         MarkDirty();
     }
 
+    /// <summary>处理 DataSeries 集合变更，触发 AutoRange 更新和渲染循环快照刷新。</summary>
     private void OnDataSeriesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         QueueAutoRangeUpdate(sender as IDataSeries);
@@ -81,6 +80,7 @@ public partial class Chart
         NotifyStreamingActivityFromAnyThread();
     }
 
+    /// <summary>处理 DataSeries 范围变更，触发 AutoRange 更新。</summary>
     private void OnDataSeriesRangeChanged(object? sender, EventArgs e)
     {
         QueueAutoRangeUpdate(sender as IDataSeries);
@@ -89,18 +89,24 @@ public partial class Chart
             RequestRedrawFromAnyThread();
     }
 
+    /// <summary>处理系列属性变更，目前仅监听 IsVisible 变更。</summary>
     private void OnSeriesPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(IRenderableSeries.IsVisible))
+        if (e.PropertyName == nameof(IRenderableSeries.IsVisible)
+            || e.PropertyName == nameof(IRenderableSeries.Stroke))
+        {
             MarkDirty();
+        }
     }
 
+    /// <summary>订阅系列集合中的所有系列。</summary>
     private void SubscribeToSeries(IEnumerable<IRenderableSeries> seriesCollection)
     {
         foreach (var series in seriesCollection)
             SubscribeToSeries(series);
     }
 
+    /// <summary>订阅单个系列：监听 PropertyChanged 和对应的 DataSeries 事件。</summary>
     private void SubscribeToSeries(IRenderableSeries series)
     {
         if (series is INotifyPropertyChanged npc)
@@ -120,12 +126,14 @@ public partial class Chart
         _dataSeriesSubscriptions.Add(series.DataSeries, 1);
     }
 
+    /// <summary>取消订阅系列集合中的所有系列。</summary>
     private void UnsubscribeFromSeries(IEnumerable<IRenderableSeries> seriesCollection)
     {
         foreach (var series in seriesCollection)
             UnsubscribeFromSeries(series);
     }
 
+    /// <summary>取消订阅单个系列：移除所有事件监听并清理渲染循环数据。</summary>
     private void UnsubscribeFromSeries(IRenderableSeries series)
     {
         if (series is INotifyPropertyChanged npc)
@@ -149,6 +157,7 @@ public partial class Chart
         _renderLoop?.RemoveSeries(series.DataSeries);
     }
 
+    /// <summary>取消订阅所有 DataSeries 的事件并清空订阅字典。</summary>
     private void UnsubscribeFromAllDataSeries()
     {
         foreach (var dataSeries in _dataSeriesSubscriptions.Keys.ToArray())

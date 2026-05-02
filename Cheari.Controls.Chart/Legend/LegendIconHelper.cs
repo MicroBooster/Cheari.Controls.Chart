@@ -101,9 +101,7 @@ public static class LegendIconHelper
     {
         if (icon is Path path)
         {
-            var brush = new SolidColorBrush(color);
-            brush.Freeze();
-            path.Stroke = brush;
+            path.Stroke = new SolidColorBrush(color);
         }
     }
 }

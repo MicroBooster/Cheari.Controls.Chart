@@ -2,9 +2,13 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:local="clr-namespace:Cheari.Controls"
                     xmlns:legend="clr-namespace:Cheari.Controls.Legend"
+                    xmlns:controls="clr-namespace:Cheari.Controls.Controls"
+                    xmlns:converters="clr-namespace:Cheari.Controls.Converters"
                     xmlns:annotations="clr-namespace:Cheari.Controls.Annotations"
                     xmlns:axesControls="clr-namespace:Cheari.Controls.Axes.Controls"
                     xmlns:vortice="clr-namespace:Vortice.Wpf;assembly=Vortice.Wpf">
+
+    <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
 
     <Style TargetType="{x:Type axesControls:AxisControl}">
         <Setter Property="Focusable" Value="False" />
@@ -33,7 +37,8 @@
     </Style>
 
     <Style TargetType="{x:Type legend:LegendControl}">
-        <Setter Property="Margin" Value="8" />
+        <Setter Property="Margin" Value="0" />
+        <Setter Property="LegendSpacing" Value="8" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type legend:LegendControl}">
@@ -43,6 +48,282 @@
                             BorderThickness="1"
                             Padding="6">
                         <StackPanel x:Name="PART_ItemsHost" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="{x:Type controls:ColorEditor}">
+        <Setter Property="MinWidth" Value="280" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type controls:ColorEditor}">
+                    <Border Background="#1E2233"
+                            BorderBrush="#3A3D4A"
+                            BorderThickness="1"
+                            CornerRadius="6" Padding="10">
+                        <StackPanel>
+                            <Grid Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <Grid>
+                                    <Image x:Name="PART_SpectrumImage"
+                                           Width="200" Height="150"
+                                           Stretch="Fill" />
+                                    <Canvas x:Name="PART_SpectrumCanvas"
+                                            Width="200" Height="150"
+                                            Background="Transparent" />
+                                </Grid>
+
+                                <Grid Grid.Column="1" Margin="6,0,0,0">
+                                    <Image x:Name="PART_HueBarImage"
+                                           Width="20" Height="150"
+                                           Stretch="Fill" />
+                                    <Canvas x:Name="PART_HueBarCanvas"
+                                            Width="20" Height="150"
+                                            Background="Transparent" />
+                                </Grid>
+                            </Grid>
+
+                            <Grid Margin="0,4,0,4"
+                                  Visibility="{Binding ShowAlpha, RelativeSource={RelativeSource TemplatedParent}, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Alpha" Foreground="#8890A0" VerticalAlignment="Center"
+                                           FontSize="11" Margin="0,0,8,0" />
+                                <Slider x:Name="PART_AlphaSlider" Grid.Column="1"
+                                        Minimum="0" Maximum="255" Value="255"
+                                        Height="16" IsSnapToTickEnabled="False">
+                                    <Slider.Template>
+                                        <ControlTemplate TargetType="Slider">
+                                            <Grid>
+                                                <Border Height="4"
+                                                        Background="#3A3D4A" CornerRadius="2"
+                                                        VerticalAlignment="Center" />
+                                                <Track x:Name="PART_Track">
+                                                    <Track.DecreaseRepeatButton>
+                                                        <RepeatButton Command="Slider.DecreaseLarge">
+                                                            <RepeatButton.Template>
+                                                                <ControlTemplate>
+                                                                    <Border Height="4" Background="#4A90D9"
+                                                                            CornerRadius="2" />
+                                                                </ControlTemplate>
+                                                            </RepeatButton.Template>
+                                                        </RepeatButton>
+                                                    </Track.DecreaseRepeatButton>
+                                                    <Track.Thumb>
+                                                        <Thumb Width="12" Height="12">
+                                                            <Thumb.Template>
+                                                                <ControlTemplate>
+                                                                    <Border Background="#4A90D9"
+                                                                            CornerRadius="6"
+                                                                            BorderBrush="#FFFFFF"
+                                                                            BorderThickness="1" />
+                                                                </ControlTemplate>
+                                                            </Thumb.Template>
+                                                        </Thumb>
+                                                    </Track.Thumb>
+                                                    <Track.IncreaseRepeatButton>
+                                                        <RepeatButton Command="Slider.IncreaseLarge">
+                                                            <RepeatButton.Template>
+                                                                <ControlTemplate>
+                                                                    <Border Height="4" Background="#2A2D3A"
+                                                                            CornerRadius="2" />
+                                                                </ControlTemplate>
+                                                            </RepeatButton.Template>
+                                                        </RepeatButton>
+                                                    </Track.IncreaseRepeatButton>
+                                                </Track>
+                                            </Grid>
+                                        </ControlTemplate>
+                                    </Slider.Template>
+                                </Slider>
+                            </Grid>
+
+                            <Grid Margin="0,6,0,0">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <Border x:Name="PART_OldPreview"
+                                            Grid.Column="0"
+                                            Width="32" Height="32"
+                                            CornerRadius="4"
+                                            BorderBrush="#3A3D4A"
+                                            BorderThickness="1" />
+                                    <Border x:Name="PART_NewPreview"
+                                            Grid.Column="1" Margin="4,0,0,0"
+                                            Width="32" Height="32"
+                                            CornerRadius="4"
+                                            BorderBrush="#3A3D4A"
+                                            BorderThickness="1" />
+
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal"
+                                                HorizontalAlignment="Right">
+                                        <TextBlock Text="#" Foreground="#8890A0"
+                                                   FontSize="12" VerticalAlignment="Center"
+                                                   Margin="0,0,6,0" />
+                                        <TextBox x:Name="PART_HexBox"
+                                                 Width="80" Height="24"
+                                                 FontSize="12"
+                                                 Background="#2A2D3A"
+                                                 Foreground="#E0E0F0"
+                                                 BorderBrush="#3A3D4A"
+                                                 BorderThickness="1"
+                                                 VerticalContentAlignment="Center"
+                                                 Text="#FF0000" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <Grid Grid.Row="1" Margin="0,6,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="4" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="4" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="4" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="R" FontSize="10" Foreground="#8890A0" />
+                                        <TextBox x:Name="PART_RBox" FontSize="12"
+                                                 Background="#2A2D3A" Foreground="#E0E0F0"
+                                                 BorderBrush="#3A3D4A" BorderThickness="1"
+                                                 Height="24" Text="255"
+                                                 VerticalContentAlignment="Center" />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="G" FontSize="10" Foreground="#8890A0" />
+                                        <TextBox x:Name="PART_GBox" FontSize="12"
+                                                 Background="#2A2D3A" Foreground="#E0E0F0"
+                                                 BorderBrush="#3A3D4A" BorderThickness="1"
+                                                 Height="24" Text="0"
+                                                 VerticalContentAlignment="Center" />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="4">
+                                        <TextBlock Text="B" FontSize="10" Foreground="#8890A0" />
+                                        <TextBox x:Name="PART_BBox" FontSize="12"
+                                                 Background="#2A2D3A" Foreground="#E0E0F0"
+                                                 BorderBrush="#3A3D4A" BorderThickness="1"
+                                                 Height="24" Text="0"
+                                                 VerticalContentAlignment="Center" />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="6">
+                                        <TextBlock Text="A" FontSize="10" Foreground="#8890A0" />
+                                        <TextBox x:Name="PART_ABox" FontSize="12"
+                                                 Background="#2A2D3A" Foreground="#E0E0F0"
+                                                 BorderBrush="#3A3D4A" BorderThickness="1"
+                                                 Height="24" Text="255"
+                                                 VerticalContentAlignment="Center" />
+                                    </StackPanel>
+                                </Grid>
+                            </Grid>
+
+                            <ItemsControl x:Name="PART_Presets"
+                                          Margin="0,8,0,4"
+                                          Visibility="{Binding ShowPresets, RelativeSource={RelativeSource TemplatedParent}, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel ItemWidth="20" ItemHeight="20" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Width="16" Height="16"
+                                                Margin="2"
+                                                Cursor="Hand"
+                                                Focusable="False"
+                                                ToolTip="{Binding ., Converter={x:Static converters:ColorToHexConverter.Instance}}">
+                                            <Button.Template>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border Background="{Binding ., Converter={x:Static converters:ColorToBrushConverter.Instance}}"
+                                                            CornerRadius="2"
+                                                            BorderBrush="Transparent"
+                                                            BorderThickness="1">
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Style.Triggers>
+                                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                                        <Setter Property="BorderBrush" Value="#667788" />
+                                                                    </Trigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Button.Template>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <StackPanel Orientation="Horizontal"
+                                        HorizontalAlignment="Right"
+                                        Margin="0,8,0,0">
+                                <Button x:Name="PART_CancelButton"
+                                        Content="Cancel" Width="72" Height="28"
+                                        FontSize="12" BorderThickness="1">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border Background="#2A2D3A"
+                                                    BorderBrush="#3A3D4A"
+                                                    BorderThickness="1"
+                                                    CornerRadius="4"
+                                                    Name="border">
+                                                <ContentPresenter HorizontalAlignment="Center"
+                                                                  VerticalAlignment="Center" />
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="border"
+                                                            Property="Background" Value="#3A3D4A" />
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+                                <Button x:Name="PART_OkButton"
+                                        Content="OK" Width="72" Height="28"
+                                        FontSize="12" Margin="8,0,0,0"
+                                        Foreground="White">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border Background="#4A90D9"
+                                                    CornerRadius="4"
+                                                    Name="border">
+                                                <ContentPresenter HorizontalAlignment="Center"
+                                                                  VerticalAlignment="Center" />
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="border"
+                                                            Property="Background" Value="#5AA0E9" />
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+                            </StackPanel>
+                        </StackPanel>
                     </Border>
                 </ControlTemplate>
             </Setter.Value>
@@ -85,7 +366,19 @@
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
 
-                            <!-- Row 0: 标题区 -->
+                            <!-- Row 0: 图表标题 -->
+                            <TextBlock x:Name="PART_Title"
+                                       Grid.Row="0"
+                                       Grid.Column="2"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       Margin="4,2,4,6"
+                                       Foreground="#FFE0E0E0"
+                                       Text="{TemplateBinding Title}"
+                                       TextWrapping="Wrap"
+                                       Visibility="Collapsed" />
 
                             <!-- Row 1: ExternalTop 图例 -->
                             <!-- Row 2: 左上角 + 顶部坐标轴 + 右上角 -->
@@ -100,7 +393,7 @@
                                         Height="1"
                                         HorizontalAlignment="Right"
                                         VerticalAlignment="Bottom"
-                                        Background="{Binding TopLeftCornerBrush, RelativeSource={RelativeSource TemplatedParent}}" />
+                                        Background="{TemplateBinding TopLeftCornerBrush}" />
                             </Grid>
                             <!-- 顶部坐标轴 -->
                             <axesControls:AxisItemsControl x:Name="PART_TopAxesPresenter"
@@ -126,7 +419,7 @@
                                         Height="1"
                                         HorizontalAlignment="Left"
                                         VerticalAlignment="Bottom"
-                                        Background="{Binding TopRightCornerBrush, RelativeSource={RelativeSource TemplatedParent}}" />
+                                        Background="{TemplateBinding TopRightCornerBrush}" />
                             </Grid>
 
                             <!-- Row 3: 核心绘图行 -->
@@ -194,7 +487,7 @@
                                 <TextBlock MaxWidth="360"
                                            Foreground="#FFFFC8C8"
                                            TextWrapping="Wrap"
-                                           Text="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=RenderError}" />
+                                           Text="{TemplateBinding RenderError}" />
                             </Border>
                             <!-- Annotations -->
                             <annotations:AnnotationsPanel x:Name="PART_AnnotationsPanel"
@@ -256,7 +549,7 @@
                                         Height="1"
                                         HorizontalAlignment="Right"
                                         VerticalAlignment="Top"
-                                        Background="{Binding BottomLeftCornerBrush, RelativeSource={RelativeSource TemplatedParent}}" />
+                                        Background="{TemplateBinding BottomLeftCornerBrush}" />
                             </Grid>
                             <!-- 底部坐标轴 -->
                             <axesControls:AxisItemsControl x:Name="PART_BottomAxesPresenter"
@@ -282,7 +575,7 @@
                                         Height="1"
                                         HorizontalAlignment="Left"
                                         VerticalAlignment="Top"
-                                        Background="{Binding BottomRightCornerBrush, RelativeSource={RelativeSource TemplatedParent}}" />
+                                        Background="{TemplateBinding BottomRightCornerBrush}" />
                             </Grid>
                         </Grid>
                     </Border>

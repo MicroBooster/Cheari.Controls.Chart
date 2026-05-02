@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Windows.Media;
 using Cheari.Controls.Core;
 using Cheari.Controls.Rendering;
 using Cheari.Controls.Rendering.Commands;
@@ -36,6 +37,10 @@ internal sealed class AreaSeriesRenderer
     private int _cachedHeight;
     private int _cachedDataVersion;
     private int _cachedSeriesIdentity;
+    private Color _cachedStrokeColor;
+    private Color _cachedFillColor;
+    private double _cachedFillOpacity;
+    private double _cachedBaselineY;
 
     public IDownsamplingStrategy DownsamplingStrategy { get; set; } = new MinMaxDownsamplingStrategy();
 
@@ -57,7 +62,11 @@ internal sealed class AreaSeriesRenderer
             && _cachedWidth == width
             && _cachedHeight == height
             && _cachedDataVersion == dataVersion
-            && _cachedSeriesIdentity == seriesIdentity)
+            && _cachedSeriesIdentity == seriesIdentity
+            && _cachedStrokeColor == series.Stroke
+            && _cachedFillColor == series.Fill
+            && Math.Abs(_cachedFillOpacity - series.FillOpacity) < 0.0001
+            && Math.Abs(_cachedBaselineY - series.BaselineY) < 0.0001)
         {
             var cached = new List<IRenderCommand>();
             if (_cachedOperation.FillVertices.Count > 0)
@@ -164,6 +173,10 @@ internal sealed class AreaSeriesRenderer
         _cachedHeight = height;
         _cachedDataVersion = dataVersion;
         _cachedSeriesIdentity = seriesIdentity;
+        _cachedStrokeColor = series.Stroke;
+        _cachedFillColor = series.Fill;
+        _cachedFillOpacity = series.FillOpacity;
+        _cachedBaselineY = series.BaselineY;
 
         var commands = new List<IRenderCommand>();
         if (op.FillVertices.Count > 0)

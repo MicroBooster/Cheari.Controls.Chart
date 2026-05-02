@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Windows.Media;
 using Cheari.Controls.Core;
 using Cheari.Controls.Data;
 using Cheari.Controls.Rendering;
@@ -52,6 +53,7 @@ internal sealed class LineSeriesRenderer
         public int Width;
         public int Height;
         public int DataVersion;
+        public Color StrokeColor;
     }
 
     private readonly ConditionalWeakTable<LineRenderableSeries, SeriesCache> _seriesCaches = new();
@@ -89,7 +91,8 @@ internal sealed class LineSeriesRenderer
             && cache.YRange.Min == context.YRange.Min && cache.YRange.Max == context.YRange.Max
             && cache.Width == width
             && cache.Height == height
-            && cache.DataVersion == dataVersion)
+            && cache.DataVersion == dataVersion
+            && cache.StrokeColor == series.Stroke)
         {
             _cachedResult[0] = cache.Operation;
             return _cachedResult;
@@ -164,6 +167,7 @@ internal sealed class LineSeriesRenderer
         cache.Width = width;
         cache.Height = height;
         cache.DataVersion = dataVersion;
+        cache.StrokeColor = series.Stroke;
 
         _cachedResult[0] = op;
         return _cachedResult;

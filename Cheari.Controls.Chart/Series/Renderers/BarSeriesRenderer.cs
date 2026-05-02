@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Windows.Media;
 using Cheari.Controls.Core;
 using Cheari.Controls.Rendering;
 using Cheari.Controls.Rendering.Commands;
@@ -34,6 +35,7 @@ internal sealed class BarSeriesRenderer
     private int _cachedHeight;
     private int _cachedDataVersion;
     private int _cachedSeriesIdentity;
+    private Color _cachedFillColor;
 
     public IReadOnlyList<IRenderCommand> Render(BarRenderableSeries series, ChartRenderContext context, int width, int height)
     {
@@ -53,7 +55,8 @@ internal sealed class BarSeriesRenderer
             && _cachedWidth == width
             && _cachedHeight == height
             && _cachedDataVersion == dataVersion
-            && _cachedSeriesIdentity == seriesIdentity)
+            && _cachedSeriesIdentity == seriesIdentity
+            && _cachedFillColor == series.Fill)
         {
             return new IRenderCommand[] { _cachedOperation };
         }
@@ -133,6 +136,7 @@ internal sealed class BarSeriesRenderer
         _cachedHeight = height;
         _cachedDataVersion = dataVersion;
         _cachedSeriesIdentity = seriesIdentity;
+        _cachedFillColor = series.Fill;
 
         return new IRenderCommand[] { op };
     }

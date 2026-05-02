@@ -10,15 +10,6 @@ using Cheari.Controls.Series.Types;
 
 namespace Cheari.Controls.Series.Renderers;
 
-/// <summary>
-/// GPU线条实例结构，用于存储线条渲染所需的数据。
-/// 内存布局必须与 HLSL 中的实例输入结构体对齐：
-/// - TEXCOORD1: float4 Segment (X1,Y1,X2,Y2)   offset=0,  size=16
-/// - COLOR0:    float4 Color (R,G,B,A)           offset=16, size=16
-/// - TEXCOORD2: float Thickness                  offset=32, size=4
-/// - Padding:   12 bytes 对齐到 16 字节边界       offset=36, size=12
-/// 总大小: 48 字节（3 × 16）
-/// </summary>
 internal struct GpuLineInstance
 {
     public float X1;
@@ -35,10 +26,6 @@ internal struct GpuLineInstance
     public float Padding2;
 }
 
-/// <summary>
-/// 线图渲染器，负责将数据系列渲染为折线图。
-/// 支持多系列缓存，每个系列独立维护缓存条目。
-/// </summary>
 internal sealed class LineSeriesRenderer
 {
     private readonly List<double> _sampledX = new();
@@ -54,6 +41,17 @@ internal sealed class LineSeriesRenderer
         public int Height;
         public int DataVersion;
         public Color StrokeColor;
+        public bool UsedDownsampledFrame;
+
+        public DownsampledFrame? DownsampledFrame;
+        public int DownsampledSourceCount;
+        public int DownsampledDataVersion;
+
+        public int VisibleStart;
+        public int VisibleEnd;
+
+        public int DirectSourceCount;
+        public int DirectInstanceCount;
     }
 
     private readonly ConditionalWeakTable<LineRenderableSeries, SeriesCache> _seriesCaches = new();
@@ -84,29 +82,59 @@ internal sealed class LineSeriesRenderer
             return Array.Empty<IRenderCommand>();
 
         int dataVersion = frame.Version;
+        int targetBucketCount = Math.Min(frame.Count, Math.Max(1, width));
 
         var cache = _seriesCaches.GetOrCreateValue(series);
-        if (cache.Operation != null
-            && cache.XRange.Min == context.XRange.Min && cache.XRange.Max == context.XRange.Max
-            && cache.YRange.Min == context.YRange.Min && cache.YRange.Max == context.YRange.Max
-            && cache.Width == width
-            && cache.Height == height
-            && cache.DataVersion == dataVersion
-            && cache.StrokeColor == series.Stroke)
-        {
-            _cachedResult[0] = cache.Operation;
-            return _cachedResult;
-        }
 
-        _sampledX.Clear();
-        _sampledY.Clear();
-
-        int targetBucketCount = Math.Min(frame.Count, Math.Max(1, width));
         float r = series.Stroke.ScR;
         float g = series.Stroke.ScG;
         float b = series.Stroke.ScB;
         float a = series.Stroke.ScA;
         float strokeThickness = Math.Max(1.0f, (float)series.StrokeThickness);
+
+        if (cache.UsedDownsampledFrame && cache.DownsampledFrame != null)
+        {
+            if (frame.Count > targetBucketCount * 2)
+            {
+                int fastVisibleStart = GlobalMinMaxDownsampler.FindVisibleStart(
+                    cache.DownsampledFrame, context.XRange.Min);
+                int fastVisibleEnd = GlobalMinMaxDownsampler.FindVisibleEnd(
+                    cache.DownsampledFrame, context.XRange.Max);
+
+                if (cache.Operation != null
+                    && cache.VisibleStart == fastVisibleStart
+                    && cache.VisibleEnd == fastVisibleEnd
+                    && cache.Width == width
+                    && cache.Height == height
+                    && cache.StrokeColor == series.Stroke)
+                {
+                    _cachedResult[0] = cache.Operation;
+                    return _cachedResult;
+                }
+            }
+        }
+        else
+        {
+            if (cache.Operation != null
+                && cache.DirectSourceCount > 0
+                && cache.Width == width
+                && cache.Height == height
+                && cache.StrokeColor == series.Stroke)
+            {
+                if (cache.DirectSourceCount == frame.Count)
+                {
+                    _cachedResult[0] = cache.Operation;
+                    return _cachedResult;
+                }
+                else if (cache.DirectSourceCount < frame.Count
+                    && frame.XValues != null && frame.YValues != null)
+                {
+                    AppendInstancesInPlace(frame, cache, r, g, b, a, strokeThickness);
+                    _cachedResult[0] = cache.Operation;
+                    return _cachedResult;
+                }
+            }
+        }
 
         var op = new LineRenderOperation
         {
@@ -114,47 +142,64 @@ internal sealed class LineSeriesRenderer
             StrokeThickness = strokeThickness
         };
 
-        if (TryBuildDirectFromFrame(frame, targetBucketCount, r, g, b, a, strokeThickness, op))
+        bool usedDownsampledFrame = false;
+        int visStart = 0, visEnd = 0;
+
+        if (frame.Count > targetBucketCount * 2
+            && frame.XValues != null
+            && frame.YValues != null)
         {
-            if (op.LineInstances.Count == 0)
-                return Array.Empty<IRenderCommand>();
+            usedDownsampledFrame = TryBuildFromDownsampledFrame(
+                frame, context, width, r, g, b, a, strokeThickness, op, cache,
+                out visStart, out visEnd);
         }
-        else
+
+        if (!usedDownsampledFrame)
         {
-            DownsamplingStrategy.Downsample(
-                new SnapshotDataSeriesAdapter(frame),
-                targetBucketCount,
-                context.XRange,
-                _sampledX,
-                _sampledY);
-
-            if (_sampledX.Count < 2)
-                return Array.Empty<IRenderCommand>();
-
-            op.LineInstances.Capacity = Math.Max(op.LineInstances.Capacity, _sampledX.Count - 1);
-
-            for (int i = 0; i < _sampledX.Count - 1; i++)
+            if (TryBuildDirectFromFrame(frame, targetBucketCount, r, g, b, a, strokeThickness, op))
             {
-                double x1 = _sampledX[i];
-                double y1 = _sampledY[i];
-                double x2 = _sampledX[i + 1];
-                double y2 = _sampledY[i + 1];
+                cache.DirectSourceCount = frame.Count;
+                cache.DirectInstanceCount = op.LineInstances.Count;
+            }
+            else
+            {
+                DownsamplingStrategy.Downsample(
+                    new SnapshotDataSeriesAdapter(frame),
+                    targetBucketCount,
+                    context.XRange,
+                    _sampledX,
+                    _sampledY);
 
-                if (IsInvalidSegment(x1, y1, x2, y2))
-                    continue;
+                if (_sampledX.Count < 2)
+                    return Array.Empty<IRenderCommand>();
 
-                op.LineInstances.Add(new GpuLineInstance
+                op.LineInstances.Capacity = Math.Max(op.LineInstances.Capacity, _sampledX.Count - 1);
+
+                for (int i = 0; i < _sampledX.Count - 1; i++)
                 {
-                    X1 = (float)x1,
-                    Y1 = (float)y1,
-                    X2 = (float)x2,
-                    Y2 = (float)y2,
-                    R = r,
-                    G = g,
-                    B = b,
-                    A = a,
-                    Thickness = strokeThickness
-                });
+                    double x1 = _sampledX[i];
+                    double y1 = _sampledY[i];
+                    double x2 = _sampledX[i + 1];
+                    double y2 = _sampledY[i + 1];
+
+                    if (IsInvalidSegment(x1, y1, x2, y2))
+                        continue;
+
+                    op.LineInstances.Add(new GpuLineInstance
+                    {
+                        X1 = (float)x1,
+                        Y1 = (float)y1,
+                        X2 = (float)x2,
+                        Y2 = (float)y2,
+                        R = r,
+                        G = g,
+                        B = b,
+                        A = a,
+                        Thickness = strokeThickness
+                    });
+                }
+
+                cache.DirectSourceCount = 0;
             }
         }
 
@@ -168,9 +213,150 @@ internal sealed class LineSeriesRenderer
         cache.Height = height;
         cache.DataVersion = dataVersion;
         cache.StrokeColor = series.Stroke;
+        cache.UsedDownsampledFrame = usedDownsampledFrame;
+        cache.VisibleStart = visStart;
+        cache.VisibleEnd = visEnd;
+
+        if (usedDownsampledFrame)
+        {
+            cache.DirectSourceCount = 0;
+            cache.DirectInstanceCount = 0;
+        }
 
         _cachedResult[0] = op;
         return _cachedResult;
+    }
+
+    private static bool TryBuildFromDownsampledFrame(
+        DataFrame frame,
+        ChartRenderContext context,
+        int width,
+        float r,
+        float g,
+        float b,
+        float a,
+        float strokeThickness,
+        LineRenderOperation op,
+        SeriesCache cache,
+        out int outVisibleStart,
+        out int outVisibleEnd)
+    {
+        int oversampleFactor = GlobalMinMaxDownsampler.DefaultOversampleFactor;
+        int totalBuckets = width * oversampleFactor;
+        if (totalBuckets <= 0)
+        {
+            outVisibleStart = 0;
+            outVisibleEnd = 0;
+            return false;
+        }
+
+        ReadOnlySpan<float> xValues = new ReadOnlySpan<float>(frame.XValues, 0, frame.Count);
+        ReadOnlySpan<float> yValues = new ReadOnlySpan<float>(frame.YValues, 0, frame.Count);
+
+        bool needFullRebuild = cache.DownsampledFrame == null
+            || frame.Count < cache.DownsampledSourceCount;
+
+        if (needFullRebuild)
+        {
+            double bucketSize = (double)frame.Count / totalBuckets;
+            cache.DownsampledFrame = Downsample(
+                xValues, yValues, frame.Count, width, oversampleFactor);
+            cache.DownsampledSourceCount = frame.Count;
+            cache.DownsampledDataVersion = frame.Version;
+        }
+        else if (frame.Count > cache.DownsampledSourceCount && cache.DownsampledFrame != null)
+        {
+            double fixedBucketSize = (double)cache.DownsampledFrame.PointsPerSourceBucket;
+            if (fixedBucketSize > 0)
+            {
+                var newPart = GlobalMinMaxDownsampler.DownsampleRange(
+                    xValues, yValues,
+                    cache.DownsampledSourceCount, frame.Count,
+                    fixedBucketSize);
+
+                if (newPart != null)
+                    cache.DownsampledFrame.AppendFrom(newPart.XValues, newPart.YValues, newPart.Count);
+
+                cache.DownsampledSourceCount = frame.Count;
+                cache.DownsampledDataVersion = frame.Version;
+            }
+        }
+
+        var dsFrame = cache.DownsampledFrame;
+        if (dsFrame == null)
+        {
+            outVisibleStart = 0;
+            outVisibleEnd = 0;
+            return false;
+        }
+
+        int visibleStart = GlobalMinMaxDownsampler.FindVisibleStart(dsFrame, context.XRange.Min);
+        int visibleEnd = GlobalMinMaxDownsampler.FindVisibleEnd(dsFrame, context.XRange.Max);
+
+        outVisibleStart = visibleStart;
+        outVisibleEnd = visibleEnd;
+
+        if (visibleStart >= visibleEnd)
+            return true;
+
+        int segmentCount = visibleEnd - visibleStart - 1;
+        if (segmentCount <= 0)
+            return true;
+
+        BuildInstancesFromSlice(dsFrame, visibleStart, visibleEnd, r, g, b, a, strokeThickness, op);
+        return true;
+    }
+
+    private static void BuildInstancesFromSlice(
+        DownsampledFrame dsFrame,
+        int visibleStart,
+        int visibleEnd,
+        float r,
+        float g,
+        float b,
+        float a,
+        float strokeThickness,
+        LineRenderOperation op)
+    {
+        int segmentCount = visibleEnd - visibleStart - 1;
+        op.LineInstances.Capacity = Math.Max(op.LineInstances.Capacity, segmentCount);
+
+        var dsX = dsFrame.XValues;
+        var dsY = dsFrame.YValues;
+
+        for (int i = visibleStart; i < visibleEnd - 1; i++)
+        {
+            float x1 = dsX[i];
+            float y1 = dsY[i];
+            float x2 = dsX[i + 1];
+            float y2 = dsY[i + 1];
+
+            if (IsInvalidSegment(x1, y1, x2, y2))
+                continue;
+
+            op.LineInstances.Add(new GpuLineInstance
+            {
+                X1 = x1,
+                Y1 = y1,
+                X2 = x2,
+                Y2 = y2,
+                R = r,
+                G = g,
+                B = b,
+                A = a,
+                Thickness = strokeThickness
+            });
+        }
+    }
+
+    private static DownsampledFrame? Downsample(
+        ReadOnlySpan<float> xValues,
+        ReadOnlySpan<float> yValues,
+        int dataCount,
+        int viewportWidth,
+        int oversampleFactor)
+    {
+        return GlobalMinMaxDownsampler.Downsample(xValues, yValues, dataCount, viewportWidth, oversampleFactor);
     }
 
     private static bool IsInvalidSegment(double x1, double y1, double x2, double y2)
@@ -189,6 +375,43 @@ internal sealed class LineSeriesRenderer
             || float.IsNaN(x2) || float.IsNaN(y2)
             || float.IsInfinity(x1) || float.IsInfinity(y1)
             || float.IsInfinity(x2) || float.IsInfinity(y2);
+    }
+
+    private static void AppendInstancesInPlace(
+        DataFrame frame,
+        SeriesCache cache,
+        float r, float g, float b, float a, float strokeThickness)
+    {
+        if (frame.XValues == null || frame.YValues == null)
+            return;
+
+        int oldCount = cache.DirectSourceCount;
+        var op = cache.Operation!;
+        var instances = op.LineInstances;
+
+        int newInstanceCount = instances.Count + (frame.Count - oldCount);
+        instances.Capacity = Math.Max(instances.Capacity, newInstanceCount);
+
+        for (int i = oldCount - 1; i < frame.Count - 1; i++)
+        {
+            float x1 = frame.XValues[i];
+            float y1 = frame.YValues[i];
+            float x2 = frame.XValues[i + 1];
+            float y2 = frame.YValues[i + 1];
+
+            if (IsInvalidSegment(x1, y1, x2, y2))
+                continue;
+
+            instances.Add(new GpuLineInstance
+            {
+                X1 = x1, Y1 = y1, X2 = x2, Y2 = y2,
+                R = r, G = g, B = b, A = a,
+                Thickness = strokeThickness
+            });
+        }
+
+        cache.DirectSourceCount = frame.Count;
+        cache.DirectInstanceCount = instances.Count;
     }
 
     private static bool TryBuildDirectFromFrame(

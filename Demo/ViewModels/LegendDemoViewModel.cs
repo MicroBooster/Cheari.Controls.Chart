@@ -174,7 +174,7 @@ public class LegendDemoViewModel : ChartDemoViewModelBase
         {
             Title = "Sine Wave",
             Stroke = Color.FromRgb(0, 188, 212),
-            StrokeThickness = 2.5,
+            StrokeThickness = 1,
             LineStyle = LineStyle.Solid,
             DataSeries = sineData
         });

@@ -57,12 +57,12 @@
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0"
-                                           Text="{Binding Icon}"
+                                           Text="{Binding Content.Icon, RelativeSource={RelativeSource TemplatedParent}}"
                                            FontSize="14"
                                            HorizontalAlignment="Center"
                                            VerticalAlignment="Center" />
                                 <TextBlock Grid.Column="2"
-                                           Text="{Binding Title}"
+                                           Text="{Binding Content.Title, RelativeSource={RelativeSource TemplatedParent}}"
                                            FontSize="13"
                                            Foreground="{StaticResource TextSecondary}"
                                            VerticalAlignment="Center"
@@ -215,6 +215,13 @@
                             </ListBoxItem>
                             <ListBoxItem Tag="HardwareOnlyDiagnosticsView">
                                 <local:NavItem Icon="&#x2699;" Title="硬件诊断" />
+                            </ListBoxItem>
+                        </ListBox>
+
+                        <TextBlock Style="{StaticResource SidebarSectionHeader}" Text="性能测试" />
+                        <ListBox x:Name="PerfList" Style="{StaticResource SidebarListView}" SelectionChanged="NavList_SelectionChanged">
+                            <ListBoxItem Tag="StressTestView">
+                                <local:NavItem Icon="&#x26A1;" Title="极限压测" />
                             </ListBoxItem>
                         </ListBox>
                     </StackPanel>

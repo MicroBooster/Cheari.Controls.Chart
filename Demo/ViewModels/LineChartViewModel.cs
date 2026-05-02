@@ -167,7 +167,7 @@ public class LineChartViewModel : ChartDemoViewModelBase
                 double x = sampleIndex * SampleStep;
                 double y = Math.Sin(x * 10) * Math.Exp(-x * 0.01);
                 dataSeries.Append(y);
-                dataSeries.Tag = y;
+                dataSeries.Tag = Math.Round(y, 2);
             }
         }
     }

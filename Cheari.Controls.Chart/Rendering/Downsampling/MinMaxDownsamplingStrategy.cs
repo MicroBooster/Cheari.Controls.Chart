@@ -46,22 +46,19 @@ public class MinMaxDownsamplingStrategy : IDownsamplingStrategy
 
         if (visibleXRange.Min != double.MinValue || visibleXRange.Max != double.MaxValue)
         {
-            for (int i = 0; i < count; i++)
+            startIndex = BinarySearchFirstGreaterOrEqual(xValues, visibleXRange.Min);
+            endIndex = BinarySearchLastLessOrEqual(xValues, visibleXRange.Max) + 1;
+
+            if (startIndex > 0 && xValues[startIndex] - visibleXRange.Min > 0
+                && Math.Abs(xValues[startIndex - 1] - visibleXRange.Min) <= 1e-10)
             {
-                if (xValues[i] >= visibleXRange.Min)
-                {
-                    startIndex = i;
-                    break;
-                }
+                startIndex--;
             }
 
-            for (int i = count - 1; i >= 0; i--)
+            if (endIndex < count && visibleXRange.Max - xValues[endIndex - 1] > 0
+                && Math.Abs(xValues[endIndex] - visibleXRange.Max) <= 1e-10)
             {
-                if (xValues[i] <= visibleXRange.Max)
-                {
-                    endIndex = i + 1;
-                    break;
-                }
+                endIndex++;
             }
 
             if (endIndex <= startIndex)
@@ -162,5 +159,35 @@ public class MinMaxDownsamplingStrategy : IDownsamplingStrategy
         sampledX.Add(xValues[index]);
         sampledY.Add(yValues[index]);
         lastAddedIndex = index;
+    }
+
+    private static int BinarySearchFirstGreaterOrEqual(ReadOnlySpan<double> values, double target)
+    {
+        int lo = 0;
+        int hi = values.Length - 1;
+        while (lo < hi)
+        {
+            int mid = lo + (hi - lo) / 2;
+            if (values[mid] < target)
+                lo = mid + 1;
+            else
+                hi = mid;
+        }
+        return lo;
+    }
+
+    private static int BinarySearchLastLessOrEqual(ReadOnlySpan<double> values, double target)
+    {
+        int lo = 0;
+        int hi = values.Length - 1;
+        while (lo < hi)
+        {
+            int mid = lo + (hi - lo + 1) / 2;
+            if (values[mid] > target)
+                hi = mid - 1;
+            else
+                lo = mid;
+        }
+        return lo;
     }
 }

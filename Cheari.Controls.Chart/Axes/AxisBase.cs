@@ -524,6 +524,11 @@ public abstract class AxisBase : DependencyObject, IAxis
     /// <param name="max">最大值</param>
     /// <param name="maxTicks">最大刻度数</param>
     /// <returns>美观的数值范围</returns>
+    internal static DataRange CalculateStaticNiceRange(double min, double max)
+    {
+        return CalculateNiceRange(min, max);
+    }
+
     protected static DataRange CalculateNiceRange(double min, double max, double maxTicks = 10)
     {
         if (double.IsInfinity(min) || double.IsInfinity(max) || min == max)

@@ -8,6 +8,7 @@ using Cheari.Controls.Axes;
 using Cheari.Controls.Axes.CoordinateMappers;
 using Cheari.Controls.Core;
 using Cheari.Controls.Data;
+using Cheari.Controls.Rendering;
 using Cheari.Controls.Rendering.Context;
 using Cheari.Controls.Series;
 
@@ -420,6 +421,18 @@ public partial class Chart
         if (relatedSeries.Length == 0)
             return;
 
+        if (!isXAxis)
+        {
+            var defaultXAxis = FindAxis(XAxes, DefaultXAxisId);
+            if (defaultXAxis != null && !defaultXAxis.AutoRange)
+            {
+                var visibleRange = ComputeVisibleYRange(
+                    relatedSeries, defaultXAxis.VisibleRange, axis);
+                YRange = visibleRange;
+                return;
+            }
+        }
+
         var range = axis.CalculateAutoRange(relatedSeries);
         if (isXAxis)
         {
@@ -435,6 +448,92 @@ public partial class Chart
             else
                 axis.VisibleRange = range;
         }
+    }
+
+    private DataRange ComputeVisibleYRange(
+        IDataSeries[] dataSeries,
+        DataRange visibleXRange,
+        IAxis yAxis)
+    {
+        double minY = double.MaxValue;
+        double maxY = double.MinValue;
+        bool hasData = false;
+
+        for (int s = 0; s < dataSeries.Length; s++)
+        {
+            var series = dataSeries[s];
+            DataFrame? frame = null;
+
+            if (_renderLoop != null
+                && _renderLoop.TryGetLatestFrame(series, series.Version, out var cachedFrame)
+                && cachedFrame != null)
+            {
+                frame = cachedFrame;
+            }
+            else if (series is IDataFrameProvider provider)
+            {
+                frame = provider.CreateFrame();
+            }
+
+            if (frame == null || frame.XValues == null || frame.YValues == null || frame.Count < 1)
+                continue;
+
+            int startIdx = BinarySearchFirstGreaterOrEqual(
+                new ReadOnlySpan<float>(frame.XValues, 0, frame.Count),
+                (float)visibleXRange.Min);
+
+            int endIdx = BinarySearchLastLessOrEqual(
+                new ReadOnlySpan<float>(frame.XValues, 0, frame.Count),
+                (float)visibleXRange.Max);
+
+            if (endIdx < startIdx)
+                continue;
+
+            for (int i = startIdx; i <= endIdx && i < frame.Count; i++)
+            {
+                float y = frame.YValues[i];
+                if (float.IsNaN(y) || float.IsInfinity(y))
+                    continue;
+
+                minY = Math.Min(minY, y);
+                maxY = Math.Max(maxY, y);
+                hasData = true;
+            }
+        }
+
+        return hasData
+            ? AxisBase.CalculateStaticNiceRange(minY, maxY)
+            : new DataRange(-1, 1);
+    }
+
+    private static int BinarySearchFirstGreaterOrEqual(ReadOnlySpan<float> values, float target)
+    {
+        int lo = 0;
+        int hi = values.Length - 1;
+        while (lo < hi)
+        {
+            int mid = lo + (hi - lo) / 2;
+            if (values[mid] < target)
+                lo = mid + 1;
+            else
+                hi = mid;
+        }
+        return lo;
+    }
+
+    private static int BinarySearchLastLessOrEqual(ReadOnlySpan<float> values, float target)
+    {
+        int lo = 0;
+        int hi = values.Length - 1;
+        while (lo < hi)
+        {
+            int mid = lo + (hi - lo + 1) / 2;
+            if (values[mid] > target)
+                hi = mid - 1;
+            else
+                lo = mid;
+        }
+        return lo;
     }
 
     private void ApplyRenderContextAxisRangeChange(string axisId, DataRange range)

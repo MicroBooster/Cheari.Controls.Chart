@@ -43,6 +43,7 @@ namespace Demo
             containerRegistry.RegisterForNavigation<DataExportView, DataExportViewModel>();
             containerRegistry.RegisterForNavigation<SoftwareBackendView, SoftwareBackendViewModel>();
             containerRegistry.RegisterForNavigation<HardwareOnlyDiagnosticsView, HardwareOnlyDiagnosticsViewModel>();
+            containerRegistry.RegisterForNavigation<StressTestView, StressTestViewModel>();
             containerRegistry.RegisterForNavigation<HomeView, HomeViewModel>();
         }
 

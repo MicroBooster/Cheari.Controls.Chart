@@ -1,5 +1,6 @@
 using System.Buffers;
 using Cheari.Controls.Core;
+using Cheari.Controls.Rendering.Downsampling;
 
 namespace Cheari.Controls.Data;
 
@@ -32,6 +33,8 @@ internal sealed class DataFrame
     internal int RentedXLength { get; init; }
     internal int RentedYLength { get; init; }
     internal int RentedOhlcLength { get; init; }
+
+    public DownsampledFrame? DownsampledFrame { get; set; }
 
     private bool _returned;
 

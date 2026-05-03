@@ -66,12 +66,22 @@ public abstract class AxisBase : DependencyObject, IAxis
         set => SetValue(VisibleRangeProperty, value);
     }
 
+    private DataRange _coreRange;
+    /// <summary>
+    /// 获取或设置核心数据范围（不含留白），用于渲染时裁剪曲线数据。
+    /// </summary>
+    public DataRange CoreRange
+    {
+        get => _coreRange;
+        set => _coreRange = value;
+    }
+
     /// <summary>
     /// 标识 VisibleRangeLimit 依赖属性。
     /// </summary>
     public static readonly DependencyProperty VisibleRangeLimitProperty =
         DependencyProperty.Register(nameof(VisibleRangeLimit), typeof(DataRange), typeof(AxisBase),
-            new PropertyMetadata(new DataRange(double.MinValue, double.MaxValue)));
+            new PropertyMetadata(new DataRange(double.MinValue, double.MaxValue), OnVisibleRangeLimitChanged));
 
     /// <summary>
     /// 获取或设置可见范围的限制边界。
@@ -87,7 +97,7 @@ public abstract class AxisBase : DependencyObject, IAxis
     /// </summary>
     public static readonly DependencyProperty VisibleRangeLimitModeProperty =
         DependencyProperty.Register(nameof(VisibleRangeLimitMode), typeof(VisibleRangeLimitMode), typeof(AxisBase),
-            new PropertyMetadata(VisibleRangeLimitMode.None));
+            new PropertyMetadata(VisibleRangeLimitMode.None, OnVisibleRangeLimitModeChanged));
 
     /// <summary>
     /// 获取或设置可见范围的限制模式。
@@ -149,6 +159,38 @@ public abstract class AxisBase : DependencyObject, IAxis
     {
         get => (bool)GetValue(AutoRangeProperty);
         set => SetValue(AutoRangeProperty, value);
+    }
+
+    /// <summary>
+    /// 标识 RangePaddingMin 依赖属性。
+    /// </summary>
+    public static readonly DependencyProperty RangePaddingMinProperty =
+        DependencyProperty.Register(nameof(RangePaddingMin), typeof(double), typeof(AxisBase),
+            new PropertyMetadata(0.0));
+
+    /// <summary>
+    /// 获取或设置坐标轴下限方向（Min 侧）的相对留白比例，0.1 表示核心范围的 10%。
+    /// </summary>
+    public double RangePaddingMin
+    {
+        get => (double)GetValue(RangePaddingMinProperty);
+        set => SetValue(RangePaddingMinProperty, value);
+    }
+
+    /// <summary>
+    /// 标识 RangePaddingMax 依赖属性。
+    /// </summary>
+    public static readonly DependencyProperty RangePaddingMaxProperty =
+        DependencyProperty.Register(nameof(RangePaddingMax), typeof(double), typeof(AxisBase),
+            new PropertyMetadata(0.0));
+
+    /// <summary>
+    /// 获取或设置坐标轴上限方向（Max 侧）的相对留白比例，0.1 表示核心范围的 10%。
+    /// </summary>
+    public double RangePaddingMax
+    {
+        get => (double)GetValue(RangePaddingMaxProperty);
+        set => SetValue(RangePaddingMaxProperty, value);
     }
 
     /// <summary>
@@ -409,10 +451,14 @@ public abstract class AxisBase : DependencyObject, IAxis
     {
         if (d is AxisBase axis)
         {
-            var clamped = axis.ClampToVisibleRangeLimit((DataRange)e.NewValue);
-            if (clamped.Min != ((DataRange)e.NewValue).Min || clamped.Max != ((DataRange)e.NewValue).Max)
+            // 将传入的 VisibleRange 视为已含留白，反向取出核心范围
+            var core = axis.ReverseRelativeRangePadding((DataRange)e.NewValue);
+            var clamped = axis.ClampToVisibleRangeLimit(core);
+            if (clamped.Min != core.Min || clamped.Max != core.Max)
             {
-                axis.SetCurrentValue(VisibleRangeProperty, clamped);
+                // CoreRange 需约束，重新施加留白后写回
+                axis.CoreRange = clamped;
+                axis.SetCurrentValue(VisibleRangeProperty, axis.ApplyRelativeRangePadding(clamped));
                 return;
             }
 
@@ -473,20 +519,86 @@ public abstract class AxisBase : DependencyObject, IAxis
                 }
                 break;
             case VisibleRangeLimitMode.MinAndMax:
-                if (min < VisibleRangeLimit.Min)
+                min = Math.Max(min, VisibleRangeLimit.Min);
+                max = Math.Min(max, VisibleRangeLimit.Max);
+                if (min > max)
                 {
                     min = VisibleRangeLimit.Min;
-                    max = Math.Min(max, VisibleRangeLimit.Max);
-                }
-                if (max > VisibleRangeLimit.Max)
-                {
                     max = VisibleRangeLimit.Max;
-                    min = Math.Max(min, VisibleRangeLimit.Min);
                 }
                 break;
         }
 
         return new DataRange(min, max);
+    }
+
+    private static void OnVisibleRangeLimitChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is AxisBase axis && !Equals(e.NewValue, e.OldValue))
+        {
+            var coreRange = axis.CoreRange.Length > 0
+                ? axis.CoreRange
+                : axis.ReverseRelativeRangePadding(axis.VisibleRange);
+
+            var clamped = axis.ClampToVisibleRangeLimit(coreRange);
+            if (clamped.Min != coreRange.Min || clamped.Max != coreRange.Max)
+            {
+                axis.CoreRange = clamped;
+                axis.VisibleRange = axis.ApplyRelativeRangePadding(clamped);
+            }
+        }
+    }
+
+    private static void OnVisibleRangeLimitModeChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is AxisBase axis && !Equals(e.NewValue, e.OldValue))
+        {
+            var coreRange = axis.CoreRange.Length > 0
+                ? axis.CoreRange
+                : axis.ReverseRelativeRangePadding(axis.VisibleRange);
+
+            var clamped = axis.ClampToVisibleRangeLimit(coreRange);
+            if (clamped.Min != coreRange.Min || clamped.Max != coreRange.Max)
+            {
+                axis.CoreRange = clamped;
+                axis.VisibleRange = axis.ApplyRelativeRangePadding(clamped);
+            }
+        }
+    }
+
+    /// <summary>对核心范围施加相对比例留白（三步链的最后一步）。</summary>
+    public DataRange ApplyRelativeRangePadding(DataRange coreRange)
+    {
+        double padMin = RangePaddingMin;
+        double padMax = RangePaddingMax;
+        if (padMin == 0 && padMax == 0)
+            return coreRange;
+
+        double length = coreRange.Max - coreRange.Min;
+        if (length <= 0)
+            return coreRange;
+
+        double padMinAbs = length * padMin;
+        double padMaxAbs = length * padMax;
+        return new DataRange(coreRange.Min - padMinAbs, coreRange.Max + padMaxAbs);
+    }
+
+    /// <summary>从含留白的范围反向计算核心范围。</summary>
+    private DataRange ReverseRelativeRangePadding(DataRange paddedRange)
+    {
+        double padMin = RangePaddingMin;
+        double padMax = RangePaddingMax;
+        if (padMin == 0 && padMax == 0)
+            return paddedRange;
+
+        double totalPadRatio = 1 + padMin + padMax;
+        if (totalPadRatio <= 0)
+            return paddedRange;
+
+        double coreLength = paddedRange.Length / totalPadRatio;
+        double padMinAbs = coreLength * padMin;
+        double padMaxAbs = coreLength * padMax;
+        return new DataRange(paddedRange.Min + padMinAbs, paddedRange.Max - padMaxAbs);
     }
 
     /// <summary>

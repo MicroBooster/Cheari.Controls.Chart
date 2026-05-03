@@ -29,6 +29,12 @@ public partial class Chart
             {
                 newSeries.CollectionChanged += chart.OnSeriesCollectionChanged;
                 chart.SubscribeToSeries(newSeries);
+
+                for (int i = 0; i < newSeries.Count; i++)
+                {
+                    if (newSeries[i].DataSeries != null && newSeries[i].DataSeries!.Count > 0)
+                        chart.QueueAutoRangeForNewSeries(newSeries[i]);
+                }
             }
 
             chart.UpdateLegendSeries();
@@ -56,13 +62,21 @@ public partial class Chart
         if (e.OldItems != null)
         {
             foreach (IRenderableSeries series in e.OldItems)
+            {
                 UnsubscribeFromSeries(series);
+                if (series.DataSeries != null)
+                    QueueAutoRangeUpdate(series.DataSeries);
+            }
         }
 
         if (e.NewItems != null)
         {
             foreach (IRenderableSeries series in e.NewItems)
+            {
                 SubscribeToSeries(series);
+                if (series.DataSeries != null && series.DataSeries.Count > 0)
+                    QueueAutoRangeForNewSeries(series);
+            }
         }
 
         UpdateLegendSeries();
@@ -92,8 +106,13 @@ public partial class Chart
     /// <summary>处理系列属性变更，目前仅监听 IsVisible 变更。</summary>
     private void OnSeriesPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(IRenderableSeries.IsVisible)
-            || e.PropertyName == nameof(IRenderableSeries.Stroke))
+        if (e.PropertyName == nameof(IRenderableSeries.IsVisible))
+        {
+            if (sender is IRenderableSeries series)
+                QueueAutoRangeForNewSeries(series);
+            MarkDirty();
+        }
+        else if (e.PropertyName == nameof(IRenderableSeries.Stroke))
         {
             MarkDirty();
         }

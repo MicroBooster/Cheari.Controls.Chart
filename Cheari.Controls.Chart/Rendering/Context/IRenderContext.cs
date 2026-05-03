@@ -35,6 +35,21 @@ public interface IRenderViewport
     /// 获取输入元素，用于鼠标事件处理。
     /// </summary>
     IInputElement? InputElement { get; }
+
+    /// <summary>绘图区 X 偏移（逻辑像素，相对于 Chart 左上角）。</summary>
+    double PlotAreaOffsetX { get; }
+
+    /// <summary>绘图区 Y 偏移（逻辑像素，相对于 Chart 左上角）。</summary>
+    double PlotAreaOffsetY { get; }
+
+    /// <summary>绘图区宽度（物理像素）。</summary>
+    int PlotAreaWidth { get; }
+
+    /// <summary>绘图区高度（物理像素）。</summary>
+    int PlotAreaHeight { get; }
+
+    /// <summary>InputElement 是否就是绘图区（DrawingSurface），鼠标坐标已是绘图区相对坐标。</summary>
+    bool IsInputElementPlotArea { get; }
 }
 
 /// <summary>

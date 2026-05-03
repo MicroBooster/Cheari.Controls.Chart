@@ -181,6 +181,9 @@
                             <ListBoxItem Tag="LegendDemoView">
                                 <local:NavItem Icon="&#x2261;" Title="图例演示" />
                             </ListBoxItem>
+                            <ListBoxItem Tag="RangePaddingDemoView">
+                                <local:NavItem Icon="&#x2194;" Title="坐标轴留白" />
+                            </ListBoxItem>
                             <ListBoxItem Tag="InteractionDemoView">
                                 <local:NavItem Icon="&#x263C;" Title="交互修饰器" />
                             </ListBoxItem>
@@ -215,6 +218,13 @@
                             </ListBoxItem>
                             <ListBoxItem Tag="HardwareOnlyDiagnosticsView">
                                 <local:NavItem Icon="&#x2699;" Title="硬件诊断" />
+                            </ListBoxItem>
+                        </ListBox>
+
+                        <TextBlock Style="{StaticResource SidebarSectionHeader}" Text="综合验证" />
+                        <ListBox x:Name="VerificationList" Style="{StaticResource SidebarListView}" SelectionChanged="NavList_SelectionChanged">
+                            <ListBoxItem Tag="ComprehensiveVerificationView">
+                                <local:NavItem Icon="&#x2714;" Title="五项全开验证" />
                             </ListBoxItem>
                         </ListBox>
 

@@ -40,6 +40,8 @@ namespace Demo
             AdvancedChartsList.SelectedIndex = -1;
             AppearanceList.SelectedIndex = -1;
             RendererList.SelectedIndex = -1;
+            VerificationList.SelectedIndex = -1;
+            PerfList.SelectedIndex = -1;
         }
 
         private void ClearOtherSelections(ListBox except)
@@ -48,6 +50,8 @@ namespace Demo
             if (except != AdvancedChartsList) AdvancedChartsList.SelectedIndex = -1;
             if (except != AppearanceList) AppearanceList.SelectedIndex = -1;
             if (except != RendererList) RendererList.SelectedIndex = -1;
+            if (except != VerificationList) VerificationList.SelectedIndex = -1;
+            if (except != PerfList) PerfList.SelectedIndex = -1;
         }
 
         private void HighlightHomeNav()

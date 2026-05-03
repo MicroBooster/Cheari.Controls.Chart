@@ -7,10 +7,10 @@ internal sealed class OhlcRenderOperation : IRenderCommand
 {
     public RenderCommandType CommandType => RenderCommandType.Ohlc;
 
-    public BarRenderOperation Bodies { get; } = new();
+    public BarRenderOperation Bodies { get; internal set; } = new();
 
     /// <summary>
     /// 获取影线（最高价-最低价线）渲染操作。
     /// </summary>
-    public LineRenderOperation Wicks { get; } = new();
+    public LineRenderOperation Wicks { get; internal set; } = new();
 }

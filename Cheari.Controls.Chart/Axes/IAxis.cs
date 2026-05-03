@@ -53,6 +53,12 @@ public interface IAxis
     DataRange VisibleRange { get; set; }
 
     /// <summary>
+    /// 获取核心数据范围（不含留白），用于渲染时裁剪曲线数据。
+    /// AutoRange=true 时为核心数据范围，AutoRange=false 时为 VisibleRange 反向扣除留白。
+    /// </summary>
+    DataRange CoreRange { get; set; }
+
+    /// <summary>
     /// 获取或设置可见范围的限制边界。
     /// 与 <see cref="VisibleRangeLimitMode"/> 配合使用，
     /// 限制 <see cref="VisibleRange"/> 不能超出此范围。

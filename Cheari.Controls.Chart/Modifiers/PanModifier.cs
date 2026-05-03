@@ -77,41 +77,66 @@ public class PanModifier : IChartModifier
             var defaultXAxis = ModifierUtilities.FindAxis(_context.XAxes, Chart.DefaultXAxisId) ?? _context.XAxes.FirstOrDefault();
             var defaultYAxis = ModifierUtilities.FindAxis(_context.YAxes, Chart.DefaultYAxisId) ?? _context.YAxes.FirstOrDefault();
 
-            var newXRange = PanHorizontal(
-                defaultXAxis?.CoordinateMapper ?? LinearCoordinateMapper.Instance,
-                defaultXAxis?.VisibleRange ?? _context.XRange,
-                _context.ViewportWidth,
-                deltaX);
+            bool canPanX = defaultXAxis == null || !defaultXAxis.AutoRange;
+            bool canPanY = defaultYAxis == null || !defaultYAxis.AutoRange;
 
-            var newYRange = PanVertical(
-                defaultYAxis?.CoordinateMapper ?? LinearCoordinateMapper.Instance,
-                defaultYAxis?.VisibleRange ?? _context.YRange,
-                _context.ViewportHeight,
-                deltaY);
+            var newXRange = canPanX
+                ? PanHorizontal(
+                    defaultXAxis?.CoordinateMapper ?? LinearCoordinateMapper.Instance,
+                    defaultXAxis?.VisibleRange ?? _context.XRange,
+                    _context.ViewportWidth,
+                    deltaX)
+                : (defaultXAxis?.VisibleRange ?? _context.XRange);
 
-            if (defaultXAxis is AxisBase xBase)
+            var newYRange = canPanY
+                ? PanVertical(
+                    defaultYAxis?.CoordinateMapper ?? LinearCoordinateMapper.Instance,
+                    defaultYAxis?.VisibleRange ?? _context.YRange,
+                    _context.ViewportHeight,
+                    deltaY)
+                : (defaultYAxis?.VisibleRange ?? _context.YRange);
+
+            if (canPanX && defaultXAxis is AxisBase xBase)
+            {
                 newXRange = xBase.ClampToVisibleRangeLimit(newXRange);
-            if (defaultYAxis is AxisBase yBase)
+                newXRange = xBase.ApplyRelativeRangePadding(newXRange);
+            }
+            if (canPanY && defaultYAxis is AxisBase yBase)
+            {
                 newYRange = yBase.ClampToVisibleRangeLimit(newYRange);
+                newYRange = yBase.ApplyRelativeRangePadding(newYRange);
+            }
 
             _context.SetRange(newXRange, newYRange);
 
-            foreach (var axis in _context.XAxes)
+            if (canPanX)
             {
-                if (axis.Id == Chart.DefaultXAxisId) continue;
-                var range = PanHorizontal(axis.CoordinateMapper, axis.VisibleRange, _context.ViewportWidth, deltaX);
-                if (axis is AxisBase xb)
-                    range = xb.ClampToVisibleRangeLimit(range);
-                _context.SetAxisRange(axis.Id, range);
+                foreach (var axis in _context.XAxes)
+                {
+                    if (axis.Id == Chart.DefaultXAxisId) continue;
+                    var range = PanHorizontal(axis.CoordinateMapper, axis.VisibleRange, _context.ViewportWidth, deltaX);
+                    if (axis is AxisBase xb)
+                    {
+                        range = xb.ClampToVisibleRangeLimit(range);
+                        range = xb.ApplyRelativeRangePadding(range);
+                    }
+                    _context.SetAxisRange(axis.Id, range);
+                }
             }
 
-            foreach (var axis in _context.YAxes)
+            if (canPanY)
             {
-                if (axis.Id == Chart.DefaultYAxisId) continue;
-                var range = PanVertical(axis.CoordinateMapper, axis.VisibleRange, _context.ViewportHeight, deltaY);
-                if (axis is AxisBase yb)
-                    range = yb.ClampToVisibleRangeLimit(range);
-                _context.SetAxisRange(axis.Id, range);
+                foreach (var axis in _context.YAxes)
+                {
+                    if (axis.Id == Chart.DefaultYAxisId) continue;
+                    var range = PanVertical(axis.CoordinateMapper, axis.VisibleRange, _context.ViewportHeight, deltaY);
+                    if (axis is AxisBase yb)
+                    {
+                        range = yb.ClampToVisibleRangeLimit(range);
+                        range = yb.ApplyRelativeRangePadding(range);
+                    }
+                    _context.SetAxisRange(axis.Id, range);
+                }
             }
 
             _lastMousePosition = currentPosition;

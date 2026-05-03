@@ -161,7 +161,7 @@ public class LinearAxis : AxisBase
         if (min == double.MaxValue)
             return new DataRange(0, 100);
 
-        return CalculateNiceRange(min, max);
+        return new DataRange(min, max);
     }
 
     /// <summary>

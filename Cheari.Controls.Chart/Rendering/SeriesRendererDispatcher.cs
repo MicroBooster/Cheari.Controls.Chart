@@ -199,7 +199,8 @@ internal sealed class SeriesRendererDispatcher
             YRange = yRange,
             XMapper = xMapper,
             YMapper = yMapper,
-            Commands = new List<IRenderCommand>(_commands)
+            Commands = new List<IRenderCommand>(_commands),
+            YAxis = yAxis
         };
     }
 
@@ -228,6 +229,7 @@ internal sealed class SeriesRendererDispatcher
         _scopedContext.PlotAreaOffsetY = source.PlotAreaOffsetY;
         _scopedContext.PlotAreaWidth = source.PlotAreaWidth;
         _scopedContext.PlotAreaHeight = source.PlotAreaHeight;
+        _scopedContext.IsInputElementPlotArea = source.IsInputElementPlotArea;
         _scopedContext.XMapper = xMapper;
         _scopedContext.YMapper = yMapper;
         _scopedContext.FrameAccessor = frameAccessor;

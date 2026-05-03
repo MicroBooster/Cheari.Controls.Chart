@@ -43,6 +43,8 @@ public class ChartRenderContext : IRenderContext
 {
     private Func<DataRange> _xRangeAccessor = () => new DataRange(0, 100);
     private Func<DataRange> _yRangeAccessor = () => new DataRange(-1, 1);
+    private Func<DataRange> _coreXRangeAccessor = () => new DataRange(0, 100);
+    private Func<DataRange> _coreYRangeAccessor = () => new DataRange(-1, 1);
     private Func<IList<IRenderableSeries>> _seriesAccessor = () => Array.Empty<IRenderableSeries>();
     private Func<IList<IAxis>> _xAxesAccessor = () => Array.Empty<IAxis>();
     private Func<IList<IAxis>> _yAxesAccessor = () => Array.Empty<IAxis>();
@@ -59,6 +61,16 @@ public class ChartRenderContext : IRenderContext
     /// 获取Y轴数据范围。
     /// </summary>
     public DataRange YRange => _yRangeAccessor();
+
+    /// <summary>
+    /// 获取X轴核心数据范围（不含留白），用于渲染时裁剪曲线数据。
+    /// </summary>
+    public DataRange CoreXRange => _coreXRangeAccessor();
+
+    /// <summary>
+    /// 获取Y轴核心数据范围（不含留白），用于渲染时裁剪曲线数据。
+    /// </summary>
+    public DataRange CoreYRange => _coreYRangeAccessor();
 
     /// <summary>
     /// 获取渲染系列列表。
@@ -120,6 +132,9 @@ public class ChartRenderContext : IRenderContext
     /// </summary>
     public int PlotAreaHeight { get; set; }
 
+    /// <summary>InputElement 是否就是绘图区（DrawingSurface）。</summary>
+    public bool IsInputElementPlotArea { get; set; }
+
     /// <summary>
     /// 获取或设置X轴坐标映射器。
     /// </summary>
@@ -146,6 +161,24 @@ public class ChartRenderContext : IRenderContext
     {
         get => _yRangeAccessor;
         set => _yRangeAccessor = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
+    /// <summary>
+    /// 获取或设置X轴核心范围访问器（不含留白）。
+    /// </summary>
+    public Func<DataRange> CoreXRangeAccessor
+    {
+        get => _coreXRangeAccessor;
+        set => _coreXRangeAccessor = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
+    /// <summary>
+    /// 获取或设置Y轴核心范围访问器（不含留白）。
+    /// </summary>
+    public Func<DataRange> CoreYRangeAccessor
+    {
+        get => _coreYRangeAccessor;
+        set => _coreYRangeAccessor = value ?? throw new ArgumentNullException(nameof(value));
     }
 
     /// <summary>

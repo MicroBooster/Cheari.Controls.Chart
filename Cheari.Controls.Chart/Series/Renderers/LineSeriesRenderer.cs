@@ -52,6 +52,8 @@ internal sealed class LineSeriesRenderer
 
         public int DirectSourceCount;
         public int DirectInstanceCount;
+
+        public double CachedDataXMin = double.NaN;
     }
 
     private readonly ConditionalWeakTable<LineRenderableSeries, SeriesCache> _seriesCaches = new();
@@ -106,7 +108,8 @@ internal sealed class LineSeriesRenderer
                     && cache.VisibleEnd == fastVisibleEnd
                     && cache.Width == width
                     && cache.Height == height
-                    && cache.StrokeColor == series.Stroke)
+                    && cache.StrokeColor == series.Stroke
+                    && Math.Abs(frame.XRange.Min - cache.CachedDataXMin) <= 1e-10)
                 {
                     _cachedResult[0] = cache.Operation;
                     return _cachedResult;
@@ -119,7 +122,8 @@ internal sealed class LineSeriesRenderer
                 && cache.DirectSourceCount > 0
                 && cache.Width == width
                 && cache.Height == height
-                && cache.StrokeColor == series.Stroke)
+                && cache.StrokeColor == series.Stroke
+                && Math.Abs(frame.XRange.Min - cache.CachedDataXMin) <= 1e-10)
             {
                 if (cache.DirectSourceCount == frame.Count)
                 {
@@ -160,6 +164,7 @@ internal sealed class LineSeriesRenderer
             {
                 cache.DirectSourceCount = frame.Count;
                 cache.DirectInstanceCount = op.LineInstances.Count;
+                cache.CachedDataXMin = frame.XRange.Min;
             }
             else
             {
@@ -200,6 +205,7 @@ internal sealed class LineSeriesRenderer
                 }
 
                 cache.DirectSourceCount = 0;
+                cache.CachedDataXMin = frame.XRange.Min;
             }
         }
 
@@ -254,7 +260,8 @@ internal sealed class LineSeriesRenderer
         ReadOnlySpan<float> yValues = new ReadOnlySpan<float>(frame.YValues, 0, frame.Count);
 
         bool needFullRebuild = cache.DownsampledFrame == null
-            || frame.Count < cache.DownsampledSourceCount;
+            || frame.Count < cache.DownsampledSourceCount
+            || Math.Abs(frame.XRange.Min - cache.CachedDataXMin) > 1e-10;
 
         if (needFullRebuild)
         {
@@ -263,6 +270,7 @@ internal sealed class LineSeriesRenderer
                 xValues, yValues, frame.Count, width, oversampleFactor);
             cache.DownsampledSourceCount = frame.Count;
             cache.DownsampledDataVersion = frame.Version;
+            cache.CachedDataXMin = frame.XRange.Min;
         }
         else if (frame.Count > cache.DownsampledSourceCount && cache.DownsampledFrame != null)
         {
@@ -279,6 +287,7 @@ internal sealed class LineSeriesRenderer
 
                 cache.DownsampledSourceCount = frame.Count;
                 cache.DownsampledDataVersion = frame.Version;
+                cache.CachedDataXMin = frame.XRange.Min;
             }
         }
 

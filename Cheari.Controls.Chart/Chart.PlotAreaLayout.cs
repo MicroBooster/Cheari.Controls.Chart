@@ -69,6 +69,14 @@ public partial class Chart
             _renderContext.PlotAreaWidth = _surface.TextureWidth;
             _renderContext.PlotAreaHeight = _surface.TextureHeight;
         }
+        else if (_gridLines != null)
+        {
+            var pos = _gridLines.TransformToAncestor(this).Transform(new Point(0, 0));
+            _renderContext.PlotAreaOffsetX = pos.X;
+            _renderContext.PlotAreaOffsetY = pos.Y;
+            _renderContext.PlotAreaWidth = (int)Math.Round(_gridLines.ActualWidth * _renderContext.DpiScaleX);
+            _renderContext.PlotAreaHeight = (int)Math.Round(_gridLines.ActualHeight * _renderContext.DpiScaleY);
+        }
         else
         {
             _renderContext.PlotAreaOffsetX = 0;
@@ -94,6 +102,7 @@ public partial class Chart
         _renderContext.DpiScaleX = dpi.DpiScaleX;
         _renderContext.DpiScaleY = dpi.DpiScaleY;
         _renderContext.InputElement = _surface is not null ? _surface : this;
+        _renderContext.IsInputElementPlotArea = _surface is not null;
         _renderContext.XMapper = defaultXAxis?.CoordinateMapper ?? LinearCoordinateMapper.Instance;
         _renderContext.YMapper = defaultYAxis?.CoordinateMapper ?? LinearCoordinateMapper.Instance;
         _renderContext.FrameAccessor = null;

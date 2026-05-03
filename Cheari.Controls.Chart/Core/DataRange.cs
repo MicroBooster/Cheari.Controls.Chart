@@ -9,17 +9,17 @@ namespace Cheari.Controls.Core;
 /// 支持在 XAML 中使用 "min,max" 格式字符串（如 "0,10"）。
 /// </summary>
 [TypeConverter(typeof(DataRangeTypeConverter))]
-public struct DataRange
+public readonly struct DataRange : IEquatable<DataRange>
 {
     /// <summary>
-    /// 获取或设置范围的最小值。
+    /// 获取范围的最小值。
     /// </summary>
-    public double Min { get; set; }
+    public double Min { get; }
 
     /// <summary>
-    /// 获取或设置范围的最大值。
+    /// 获取范围的最大值。
     /// </summary>
-    public double Max { get; set; }
+    public double Max { get; }
 
     /// <summary>
     /// 获取范围的长度（Max - Min）。
@@ -28,14 +28,41 @@ public struct DataRange
 
     /// <summary>
     /// 使用指定的最小值和最大值初始化 DataRange 结构。
+    /// 构造器内自动保证 Max >= Min。
     /// </summary>
     /// <param name="min">范围的最小值</param>
     /// <param name="max">范围的最大值</param>
     public DataRange(double min, double max)
     {
-        Min = min;
-        Max = max;
+        if (min <= max)
+        {
+            Min = min;
+            Max = max;
+        }
+        else
+        {
+            Min = max;
+            Max = min;
+        }
     }
+
+    public override string ToString()
+        => $"({Min}, {Max})";
+
+    public override bool Equals(object? obj)
+        => obj is DataRange other && Equals(other);
+
+    public bool Equals(DataRange other)
+        => Min.Equals(other.Min) && Max.Equals(other.Max);
+
+    public override int GetHashCode()
+        => HashCode.Combine(Min, Max);
+
+    public static bool operator ==(DataRange left, DataRange right)
+        => left.Equals(right);
+
+    public static bool operator !=(DataRange left, DataRange right)
+        => !left.Equals(right);
 }
 
 /// <summary>

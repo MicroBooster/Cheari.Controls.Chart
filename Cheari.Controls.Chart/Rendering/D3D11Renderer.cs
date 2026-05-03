@@ -324,7 +324,7 @@ VSOutput main(VSInput input)
 
     float halfSize = input.Size * 0.5f;
     float alongSign = input.Quad.x * 2.0f - 1.0f;
-    float sideSign = input.Quad.y * 2.0f - 1.0f;
+    float sideSign = input.Quad.y;
     float2 pixelPosition = centerScreen + float2(alongSign, sideSign) * halfSize;
 
     float2 ndc;
@@ -430,7 +430,8 @@ VSOutput main(VSInput input)
 
     float2 pixelPosition;
     pixelPosition.x = lerp(minScreen.x, maxScreen.x, input.Quad.x);
-    pixelPosition.y = lerp(minScreen.y, maxScreen.y, input.Quad.y);
+    float quadY = (input.Quad.y + 1.0f) * 0.5f;
+    pixelPosition.y = lerp(minScreen.y, maxScreen.y, quadY);
 
     float2 ndc;
     ndc.x = (pixelPosition.x / gViewportSize.x) * 2.0f - 1.0f;
@@ -688,7 +689,21 @@ float4 main(PSInput input) : SV_Target
             for (int g = 0; g < renderGroups.Count; g++)
             {
                 var group = renderGroups[g];
-                UpdateConstants(width, height, enableAntialiasing, group.XRange, group.YRange);
+                var yRange = group.YRange;
+                var xRange = group.XRange;
+
+                if (group.YAxis != null)
+                {
+                    var currentYRange = group.YAxis.VisibleRange;
+
+                    if (Math.Abs(currentYRange.Min - yRange.Min) > 1e-10
+                        || Math.Abs(currentYRange.Max - yRange.Max) > 1e-10)
+                    {
+                        yRange = currentYRange;
+                    }
+                }
+
+                UpdateConstants(width, height, enableAntialiasing, xRange, yRange);
 
                 var commands = group.Commands;
                 for (int i = 0; i < commands.Count; i++)

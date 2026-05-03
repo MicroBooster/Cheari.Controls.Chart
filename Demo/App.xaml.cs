@@ -44,6 +44,8 @@ namespace Demo
             containerRegistry.RegisterForNavigation<SoftwareBackendView, SoftwareBackendViewModel>();
             containerRegistry.RegisterForNavigation<HardwareOnlyDiagnosticsView, HardwareOnlyDiagnosticsViewModel>();
             containerRegistry.RegisterForNavigation<StressTestView, StressTestViewModel>();
+            containerRegistry.RegisterForNavigation<ComprehensiveVerificationView, ComprehensiveVerificationViewModel>();
+            containerRegistry.RegisterForNavigation<RangePaddingDemoView, RangePaddingDemoViewModel>();
             containerRegistry.RegisterForNavigation<HomeView, HomeViewModel>();
         }
 

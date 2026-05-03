@@ -72,15 +72,18 @@ public class ZoomModifier : IChartModifier
 
         double zoomFactor = e.Delta > 0 ? 1.0 - ZoomStep : 1.0 + ZoomStep;
 
-        Point mousePos = e.GetPosition(_context.InputElement);
-        double pixelX = Math.Clamp(mousePos.X * _context.DpiScaleX, 0.0, _context.ViewportWidth);
-        double pixelY = Math.Clamp(mousePos.Y * _context.DpiScaleY, 0.0, _context.ViewportHeight);
+        // 以视口中心为缩放基点
+        double pixelX = _context.ViewportWidth / 2.0;
+        double pixelY = _context.ViewportHeight / 2.0;
 
         var defaultXAxis = ModifierUtilities.FindAxis(_context.XAxes, Chart.DefaultXAxisId) ?? _context.XAxes.FirstOrDefault();
         var defaultYAxis = ModifierUtilities.FindAxis(_context.YAxes, Chart.DefaultYAxisId) ?? _context.YAxes.FirstOrDefault();
 
-        bool zoomX = Keyboard.Modifiers != ModifierKeys.Shift;
-        bool zoomY = Keyboard.Modifiers != ModifierKeys.Control;
+        bool canZoomX = defaultXAxis == null || !defaultXAxis.AutoRange;
+        bool canZoomY = defaultYAxis == null || !defaultYAxis.AutoRange;
+
+        bool zoomX = Keyboard.Modifiers != ModifierKeys.Shift && canZoomX;
+        bool zoomY = Keyboard.Modifiers != ModifierKeys.Control && canZoomY;
 
         DataRange newXRange = defaultXAxis?.VisibleRange ?? _context.XRange;
         DataRange newYRange = defaultYAxis?.VisibleRange ?? _context.YRange;
@@ -94,7 +97,10 @@ public class ZoomModifier : IChartModifier
                 pixelX,
                 zoomFactor);
             if (defaultXAxis is AxisBase xBase)
+            {
                 newXRange = xBase.ClampToVisibleRangeLimit(newXRange);
+                newXRange = xBase.ApplyRelativeRangePadding(newXRange);
+            }
         }
 
         if (zoomY)
@@ -102,11 +108,14 @@ public class ZoomModifier : IChartModifier
             newYRange = ZoomVertical(
                 defaultYAxis?.CoordinateMapper ?? LinearCoordinateMapper.Instance,
                 newYRange,
-                _context.ViewportHeight,
+                 _context.ViewportHeight,
                 pixelY,
                 zoomFactor);
             if (defaultYAxis is AxisBase yBase)
+            {
                 newYRange = yBase.ClampToVisibleRangeLimit(newYRange);
+                newYRange = yBase.ApplyRelativeRangePadding(newYRange);
+            }
         }
 
         _context.SetRange(newXRange, newYRange);
@@ -118,7 +127,10 @@ public class ZoomModifier : IChartModifier
                 if (axis.Id == Chart.DefaultXAxisId) continue;
                 var range = ZoomHorizontal(axis.CoordinateMapper, axis.VisibleRange, _context.ViewportWidth, pixelX, zoomFactor);
                 if (axis is AxisBase xb)
+                {
                     range = xb.ClampToVisibleRangeLimit(range);
+                    range = xb.ApplyRelativeRangePadding(range);
+                }
                 _context.SetAxisRange(axis.Id, range);
             }
         }
@@ -130,7 +142,10 @@ public class ZoomModifier : IChartModifier
                 if (axis.Id == Chart.DefaultYAxisId) continue;
                 var range = ZoomVertical(axis.CoordinateMapper, axis.VisibleRange, _context.ViewportHeight, pixelY, zoomFactor);
                 if (axis is AxisBase yb)
+                {
                     range = yb.ClampToVisibleRangeLimit(range);
+                    range = yb.ApplyRelativeRangePadding(range);
+                }
                 _context.SetAxisRange(axis.Id, range);
             }
         }

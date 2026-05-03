@@ -1,4 +1,5 @@
 using Cheari.Controls.Core;
+using Cheari.Controls.Axes;
 using Cheari.Controls.Rendering.Commands;
 using Cheari.Controls.Axes.CoordinateMappers;
 
@@ -33,4 +34,9 @@ internal sealed class AxisRenderGroup
     /// 获取渲染命令列表。
     /// </summary>
     public IReadOnlyList<IRenderCommand> Commands { get; init; } = Array.Empty<IRenderCommand>();
+
+    /// <summary>
+    /// 获取Y轴引用，用于GPU渲染时实时验证YRange一致性。
+    /// </summary>
+    public IAxis? YAxis { get; init; }
 }

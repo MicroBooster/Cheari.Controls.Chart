@@ -1835,6 +1835,121 @@ public class DataSeriesTests
         public Color? GetPointColor(int index) => Colors.Gold;
     }
 
+    [Fact]
+    public void Chart_ZoomExtents_BarYAxis_AdjustsToDataRange()
+    {
+        RunInSta(() =>
+        {
+            var dataSeries = new VariableDataSeries<double, double>(x => x);
+            dataSeries.Append(0, 156);
+            dataSeries.Append(1, 89);
+            dataSeries.Append(2, 234);
+            dataSeries.Append(3, 178);
+            dataSeries.Append(4, 198);
+            dataSeries.Append(5, 45);
+
+            var yAxis = new LinearAxis
+            {
+                Id = Chart.DefaultYAxisId,
+                Placement = AxisPlacement.Left,
+                VisibleRange = new DataRange(0, 100),
+                VisibleRangeLimitMode = VisibleRangeLimitMode.None,
+                VisibleRangeLimit = new DataRange(double.MinValue, double.MaxValue),
+                AutoRange = true
+            };
+
+            var xAxis = new LinearAxis
+            {
+                Id = Chart.DefaultXAxisId,
+                Placement = AxisPlacement.Bottom,
+                VisibleRange = new DataRange(-1, 6),
+                AutoRange = true
+            };
+
+            var chart = new Chart
+            {
+                Series = new ObservableCollection<IRenderableSeries>
+                {
+                    new BarRenderableSeries
+                    {
+                        DataSeries = dataSeries,
+                        BarSpacing = 0.2
+                    }
+                },
+                XAxes = [xAxis],
+                YAxes = [yAxis]
+            };
+
+            chart.ZoomExtents();
+
+            Assert.True(chart.YRange.Max >= 200,
+                $"YRange.Max should be >= 200 to cover data max 234, got {chart.YRange.Max}");
+            Assert.True(chart.YRange.Min <= 0,
+                $"YRange.Min should be <= 0 for bar baseline, got {chart.YRange.Min}");
+            Assert.True(yAxis.VisibleRange.Max >= 200,
+                $"yAxis.VisibleRange.Max should be >= 200, got {yAxis.VisibleRange.Max}");
+            Assert.True(yAxis.VisibleRange.Min <= 0,
+                $"yAxis.VisibleRange.Min should be <= 0, got {yAxis.VisibleRange.Min}");
+        });
+    }
+
+    [Fact]
+    public void Chart_ZoomExtents_BarYAxis_ReplacesManuallyZoomedRange()
+    {
+        RunInSta(() =>
+        {
+            var dataSeries = new VariableDataSeries<double, double>(x => x);
+            dataSeries.Append(0, 156);
+            dataSeries.Append(1, 89);
+            dataSeries.Append(2, 234);
+            dataSeries.Append(3, 178);
+
+            var yAxis = new LinearAxis
+            {
+                Id = Chart.DefaultYAxisId,
+                Placement = AxisPlacement.Left,
+                VisibleRange = new DataRange(0, 100),
+                AutoRange = true
+            };
+
+            var xAxis = new LinearAxis
+            {
+                Id = Chart.DefaultXAxisId,
+                Placement = AxisPlacement.Bottom,
+                VisibleRange = new DataRange(-1, 4),
+                AutoRange = true
+            };
+
+            var chart = new Chart
+            {
+                Series = new ObservableCollection<IRenderableSeries>
+                {
+                    new BarRenderableSeries
+                    {
+                        DataSeries = dataSeries,
+                        BarSpacing = 0.2
+                    }
+                },
+                XAxes = [xAxis],
+                YAxes = [yAxis]
+            };
+
+            chart.YRange = new DataRange(30, 70);
+            chart.XRange = new DataRange(1, 2);
+
+            chart.ZoomExtents();
+
+            Assert.True(chart.YRange.Max >= 200,
+                $"After zoom-in then ZoomExtents, YRange.Max should be >= 200, got {chart.YRange.Max}");
+            Assert.True(chart.YRange.Min <= 0,
+                $"After zoom-in then ZoomExtents, YRange.Min should be <= 0, got {chart.YRange.Min}");
+            Assert.True(yAxis.VisibleRange.Max >= 200,
+                $"After zoom-in then ZoomExtents, yAxis.VisibleRange.Max should be >= 200, got {yAxis.VisibleRange.Max}");
+            Assert.True(yAxis.VisibleRange.Min <= 0,
+                $"After zoom-in then ZoomExtents, yAxis.VisibleRange.Min should be <= 0, got {yAxis.VisibleRange.Min}");
+        });
+    }
+
     private sealed class CountingLinearAxis : LinearAxis
     {
         public int AutoRangeCallCount { get; private set; }

@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -72,10 +73,12 @@ public class CoreTests
     }
 
     [Fact]
-    public void DataRange_NegativeRange_LengthIsNegative()
+    public void DataRange_NegativeRange_AutoSwapAndLengthPositive()
     {
         var range = new DataRange(10, 3);
-        Assert.Equal(-7, range.Length);
+        Assert.Equal(3, range.Min);
+        Assert.Equal(10, range.Max);
+        Assert.Equal(7, range.Length);
     }
 
     [Fact]
@@ -2548,4 +2551,730 @@ public class CoordinateMapperAdditionalTests
     {
         Assert.Same(DateTimeCoordinateMapper.Instance, DateTimeCoordinateMapper.Instance);
     }
+}
+
+public class BarRenderingRegressionTests
+{
+    [Fact]
+    public void GpuBarInstance_MemoryLayout_MatchesGPUInputLayout()
+    {
+        int size = Marshal.SizeOf<GpuBarInstance>();
+        Assert.Equal(32, size);
+
+        int offsetX1 = (int)Marshal.OffsetOf<GpuBarInstance>(nameof(GpuBarInstance.X1));
+        int offsetY1 = (int)Marshal.OffsetOf<GpuBarInstance>(nameof(GpuBarInstance.Y1));
+        int offsetX2 = (int)Marshal.OffsetOf<GpuBarInstance>(nameof(GpuBarInstance.X2));
+        int offsetY2 = (int)Marshal.OffsetOf<GpuBarInstance>(nameof(GpuBarInstance.Y2));
+        int offsetR = (int)Marshal.OffsetOf<GpuBarInstance>(nameof(GpuBarInstance.R));
+        int offsetG = (int)Marshal.OffsetOf<GpuBarInstance>(nameof(GpuBarInstance.G));
+        int offsetB = (int)Marshal.OffsetOf<GpuBarInstance>(nameof(GpuBarInstance.B));
+        int offsetA = (int)Marshal.OffsetOf<GpuBarInstance>(nameof(GpuBarInstance.A));
+
+        Assert.Equal(0, offsetX1);
+        Assert.Equal(4, offsetY1);
+        Assert.Equal(8, offsetX2);
+        Assert.Equal(12, offsetY2);
+        Assert.Equal(16, offsetR);
+        Assert.Equal(20, offsetG);
+        Assert.Equal(24, offsetB);
+        Assert.Equal(28, offsetA);
+    }
+
+    [Fact]
+    public void QuadVertex_MemoryLayout_MatchesGPUInputLayout()
+    {
+        int size = Marshal.SizeOf<QuadVertex>();
+        Assert.Equal(8, size);
+
+        int offsetAlong = (int)Marshal.OffsetOf<QuadVertex>(nameof(QuadVertex.Along));
+        int offsetSide = (int)Marshal.OffsetOf<QuadVertex>(nameof(QuadVertex.Side));
+
+        Assert.Equal(0, offsetAlong);
+        Assert.Equal(4, offsetSide);
+    }
+
+    [Fact]
+    public void BarSeriesRenderer_BarInstances_NoDoubleHeight()
+    {
+        TestHelper.RunInSta(() =>
+        {
+            double[] data = [23, 45, 67, 34, 89, 56, 78, 43, 91, 65, 38, 72];
+             var ds = new UniformDataSeries<double, double>(i => i, x => x);
+             foreach (var v in data)
+                 ds.Append(v);
+             var barSeries = new BarRenderableSeries
+             {
+                 Fill = Colors.DodgerBlue,
+                 DataSeries = ds
+             };
+
+            var context = new ChartRenderContext
+            {
+                XRangeAccessor = () => new DataRange(0, 12),
+                YRangeAccessor = () => new DataRange(0, 100)
+            };
+
+            var renderer = new BarSeriesRenderer();
+            var commands = renderer.Render(barSeries, context, 400, 300);
+
+            var barCmd = Assert.Single(commands);
+            var barOp = Assert.IsType<BarRenderOperation>(barCmd);
+            Assert.Equal(data.Length, barOp.Instances.Count);
+
+            var mapper = LinearCoordinateMapper.Instance;
+            var yRange = new DataRange(0, 100);
+            double viewportHeight = 300;
+
+            for (int i = 0; i < data.Length; i++)
+            {
+                var inst = barOp.Instances[i];
+                double y1 = inst.Y1;
+                double y2 = inst.Y2;
+
+                Assert.Equal(0.0, y1, 5);
+                Assert.Equal(data[i], y2, 5);
+
+                double expectedHeight = mapper.DataToScreen(y2, yRange, viewportHeight)
+                                       - mapper.DataToScreen(y1, yRange, viewportHeight);
+                double actualHeight = y2 - y1;
+
+                double ratio = actualHeight / (yRange.Max - yRange.Min) * viewportHeight;
+                Assert.Equal(expectedHeight, ratio, 3);
+            }
+        });
+    }
+
+    [Fact]
+    public void BarSeriesRenderer_BarHeight_FormulaMatchesCoordinateMapper()
+    {
+        double[] dataValues = [10, 50, 91, 25, 75];
+        var yRange = new DataRange(0, 100);
+        double viewportHeight = 500;
+
+        var mapper = LinearCoordinateMapper.Instance;
+
+        foreach (double value in dataValues)
+         {
+             double screenPos = mapper.DataToScreen(value, yRange, viewportHeight);
+             double baselinePos = mapper.DataToScreen(0, yRange, viewportHeight);
+             double expectedPixelHeight = Math.Abs(baselinePos - screenPos);
+
+             double formulaPixelHeight = (value - 0) / (yRange.Max - yRange.Min) * viewportHeight;
+
+             Assert.Equal(expectedPixelHeight, formulaPixelHeight, 1e-6);
+             Assert.NotEqual(expectedPixelHeight * 2.0, formulaPixelHeight, 1e-6);
+         }
+    }
+}
+
+public class VisibleRangeProcessingTests
+{
+    #region ApplyRelativeRangePadding
+
+    [Fact]
+    public void ApplyRelativeRangePadding_ZeroPadding_ReturnsSameRange()
+    {
+        TestHelper.RunInSta(() =>
+        {
+            var axis = new LinearAxis();
+            var core = new DataRange(10, 100);
+            var result = axis.ApplyRelativeRangePadding(core);
+            Assert.Equal(core.Min, result.Min);
+            Assert.Equal(core.Max, result.Max);
+        });
+    }
+
+    [Fact]
+    public void ApplyRelativeRangePadding_MinOnly_ExtendsMinSide()
+    {
+        TestHelper.RunInSta(() =>
+        {
+            var axis = new LinearAxis { RangePaddingMin = 0.1 };
+            var core = new DataRange(0, 100);
+            var result = axis.ApplyRelativeRangePadding(core);
+
+            double expectedPad = 100 * 0.1;
+            Assert.Equal(core.Min - expectedPad, result.Min, 6);
+            Assert.Equal(core.Max, result.Max, 6);
+        });
+    }
+
+    [Fact]
+    public void ApplyRelativeRangePadding_MaxOnly_ExtendsMaxSide()
+    {
+        TestHelper.RunInSta(() =>
+        {
+            var axis = new LinearAxis { RangePaddingMax = 0.1 };
+            var core = new DataRange(0, 100);
+            var result = axis.ApplyRelativeRangePadding(core);
+
+            double expectedPad = 100 * 0.1;
+            Assert.Equal(core.Min, result.Min, 6);
+            Assert.Equal(core.Max + expectedPad, result.Max, 6);
+        });
+    }
+
+    [Fact]
+    public void ApplyRelativeRangePadding_BothSides_ExtendsBothIndependently()
+    {
+        TestHelper.RunInSta(() =>
+        {
+            var axis = new LinearAxis
+            {
+                RangePaddingMin = 0.05,
+                RangePaddingMax = 0.15
+            };
+            var core = new DataRange(0, 200);
+            var result = axis.ApplyRelativeRangePadding(core);
+
+            Assert.Equal(core.Min - 200 * 0.05, result.Min, 6);
+            Assert.Equal(core.Max + 200 * 0.15, result.Max, 6);
+        });
+    }
+
+    [Fact]
+    public void ApplyRelativeRangePadding_ZeroLength_ReturnsSameRange()
+    {
+        TestHelper.RunInSta(() =>
+        {
+            var axis = new LinearAxis
+            {
+                RangePaddingMin = 0.1,
+                RangePaddingMax = 0.1
+            };
+            var core = new DataRange(5, 5);
+            var result = axis.ApplyRelativeRangePadding(core);
+            Assert.Equal(5, result.Min);
+            Assert.Equal(5, result.Max);
+        });
+    }
+
+    [Fact]
+    public void RangePaddingMinMax_AreIndependentProperties_NoSwap()
+    {
+        TestHelper.RunInSta(() =>
+        {
+            var axis = new LinearAxis
+            {
+                RangePaddingMin = 0.2,
+                RangePaddingMax = 0.0
+            };
+
+            Assert.Equal(0.2, axis.RangePaddingMin);
+            Assert.Equal(0.0, axis.RangePaddingMax);
+        });
+    }
+
+    #endregion
+
+    #region ReverseRelativeRangePadding
+
+    [Fact]
+    public void ReverseRelativeRangePadding_ZeroPadding_ReturnsSameRange()
+    {
+        TestHelper.RunInSta(() =>
+        {
+            var axis = new LinearAxis();
+            var padded = new DataRange(0, 100);
+            var core = CallReverseRelativeRangePadding(axis, padded);
+            Assert.Equal(padded.Min, core.Min);
+            Assert.Equal(padded.Max, core.Max);
+        });
+    }
+
+    [Fact]
+    public void ReverseRelativeRangePadding_RoundTrip_PreservesCoreRange()
+    {
+        TestHelper.RunInSta(() =>
+        {
+            var axis = new LinearAxis
+            {
+                RangePaddingMin = 0.1,
+                RangePaddingMax = 0.15
+            };
+            var originalCore = new DataRange(20, 120);
+            var visible = axis.ApplyRelativeRangePadding(originalCore);
+            var recoveredCore = CallReverseRelativeRangePadding(axis, visible);
+
+            Assert.Equal(originalCore.Min, recoveredCore.Min, 6);
+            Assert.Equal(originalCore.Max, recoveredCore.Max, 6);
+        });
+    }
+
+    [Fact]
+    public void ReverseRelativeRangePadding_MinAndMax_RecoversCorrectly()
+    {
+        TestHelper.RunInSta(() =>
+        {
+            var axis = new LinearAxis
+            {
+                RangePaddingMin = 0.05,
+                RangePaddingMax = 0.2
+            };
+            var padded = new DataRange(-10, 200);
+            var core = CallReverseRelativeRangePadding(axis, padded);
+            var rePadded = axis.ApplyRelativeRangePadding(core);
+
+            Assert.Equal(padded.Min, rePadded.Min, 6);
+            Assert.Equal(padded.Max, rePadded.Max, 6);
+        });
+    }
+
+    private static DataRange CallReverseRelativeRangePadding(LinearAxis axis, DataRange padded)
+    {
+        var method = typeof(AxisBase).GetMethod("ReverseRelativeRangePadding",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        return (DataRange)method!.Invoke(axis, [padded])!;
+    }
+
+    #endregion
+
+    #region ClampToVisibleRangeLimit
+
+    [Fact]
+    public void ClampToVisibleRangeLimit_None_ReturnsSameRange()
+    {
+        TestHelper.RunInSta(() =>
+        {
+            var axis = new LinearAxis
+            {
+                VisibleRangeLimitMode = VisibleRangeLimitMode.None,
+                VisibleRangeLimit = new DataRange(0, 50)
+            };
+            var range = new DataRange(-10, 200);
+            var result = axis.ClampToVisibleRangeLimit(range);
+            Assert.Equal(range.Min, result.Min);
+            Assert.Equal(range.Max, result.Max);
+        });
+    }
+
+    [Fact]
+    public void ClampToVisibleRangeLimit_MinOnly_ClampsMinAndPreservesLength()
+    {
+        TestHelper.RunInSta(() =>
+        {
+            var axis = new LinearAxis
+            {
+                VisibleRangeLimitMode = VisibleRangeLimitMode.MinOnly,
+                VisibleRangeLimit = new DataRange(5, 100)
+            };
+            var range = new DataRange(0, 20);
+            var result = axis.ClampToVisibleRangeLimit(range);
+
+            Assert.Equal(5, result.Min);
+            Assert.Equal(25, result.Max);
+            Assert.Equal(20, result.Length, 6);
+        });
+    }
+
+    [Fact]
+    public void ClampToVisibleRangeLimit_MinOnly_WithinLimit_NoChange()
+    {
+        TestHelper.RunInSta(() =>
+        {
+            var axis = new LinearAxis
+            {
+                VisibleRangeLimitMode = VisibleRangeLimitMode.MinOnly,
+                VisibleRangeLimit = new DataRange(5, 100)
+            };
+            var range = new DataRange(10, 30);
+            var result = axis.ClampToVisibleRangeLimit(range);
+
+            Assert.Equal(10, result.Min);
+            Assert.Equal(30, result.Max);
+        });
+    }
+
+    [Fact]
+    public void ClampToVisibleRangeLimit_MaxOnly_ClampsMaxAndPreservesLength()
+    {
+        TestHelper.RunInSta(() =>
+        {
+            var axis = new LinearAxis
+            {
+                VisibleRangeLimitMode = VisibleRangeLimitMode.MaxOnly,
+                VisibleRangeLimit = new DataRange(0, 50)
+            };
+            var range = new DataRange(10, 70);
+            var result = axis.ClampToVisibleRangeLimit(range);
+
+            Assert.Equal(-10, result.Min);
+            Assert.Equal(50, result.Max);
+            Assert.Equal(60, result.Length, 6);
+        });
+    }
+
+    [Fact]
+    public void ClampToVisibleRangeLimit_MaxOnly_WithinLimit_NoChange()
+    {
+        TestHelper.RunInSta(() =>
+        {
+            var axis = new LinearAxis
+            {
+                VisibleRangeLimitMode = VisibleRangeLimitMode.MaxOnly,
+                VisibleRangeLimit = new DataRange(0, 100)
+            };
+            var range = new DataRange(10, 80);
+            var result = axis.ClampToVisibleRangeLimit(range);
+
+            Assert.Equal(10, result.Min);
+            Assert.Equal(80, result.Max);
+        });
+    }
+
+    [Fact]
+    public void ClampToVisibleRangeLimit_MinAndMax_ClampsBothSides()
+    {
+        TestHelper.RunInSta(() =>
+        {
+            var axis = new LinearAxis
+            {
+                VisibleRangeLimitMode = VisibleRangeLimitMode.MinAndMax,
+                VisibleRangeLimit = new DataRange(0, 100)
+            };
+            var range = new DataRange(-10, 150);
+            var result = axis.ClampToVisibleRangeLimit(range);
+
+            Assert.Equal(0, result.Min);
+            Assert.Equal(100, result.Max);
+        });
+    }
+
+    [Fact]
+    public void ClampToVisibleRangeLimit_MinAndMax_FullyOutside_ReturnsLimit()
+    {
+        TestHelper.RunInSta(() =>
+        {
+            var axis = new LinearAxis
+            {
+                VisibleRangeLimitMode = VisibleRangeLimitMode.MinAndMax,
+                VisibleRangeLimit = new DataRange(10, 50)
+            };
+            var range = new DataRange(60, 100);
+            var result = axis.ClampToVisibleRangeLimit(range);
+
+            Assert.Equal(10, result.Min);
+            Assert.Equal(50, result.Max);
+        });
+    }
+
+    [Fact]
+    public void ClampToVisibleRangeLimit_MinAndMax_WithinLimit_NoChange()
+    {
+        TestHelper.RunInSta(() =>
+        {
+            var axis = new LinearAxis
+            {
+                VisibleRangeLimitMode = VisibleRangeLimitMode.MinAndMax,
+                VisibleRangeLimit = new DataRange(0, 100)
+            };
+            var range = new DataRange(20, 80);
+            var result = axis.ClampToVisibleRangeLimit(range);
+
+            Assert.Equal(20, result.Min);
+            Assert.Equal(80, result.Max);
+        });
+    }
+
+    #endregion
+
+    #region 三步链完整验证
+
+    [Fact]
+    public void ThreeStepChain_WithoutLimit_VisibleEqualsCoreWithPadding()
+    {
+        TestHelper.RunInSta(() =>
+        {
+            var axis = new LinearAxis
+            {
+                RangePaddingMin = 0.1,
+                RangePaddingMax = 0.2,
+                VisibleRangeLimitMode = VisibleRangeLimitMode.None
+            };
+            var core = new DataRange(0, 100);
+
+            var clamped = axis.ClampToVisibleRangeLimit(core);
+            var visible = axis.ApplyRelativeRangePadding(clamped);
+
+            Assert.Equal(core.Min, clamped.Min);
+            Assert.Equal(core.Max, clamped.Max);
+            Assert.True(visible.Length > core.Length);
+        });
+    }
+
+    [Fact]
+    public void ThreeStepChain_WithLimit_ClampedBeforePadding()
+    {
+        TestHelper.RunInSta(() =>
+        {
+            var axis = new LinearAxis
+            {
+                RangePaddingMin = 0.1,
+                RangePaddingMax = 0.1,
+                VisibleRangeLimitMode = VisibleRangeLimitMode.MinAndMax,
+                VisibleRangeLimit = new DataRange(5, 95)
+            };
+            var core = new DataRange(0, 100);
+
+            var clamped = axis.ClampToVisibleRangeLimit(core);
+            var visible = axis.ApplyRelativeRangePadding(clamped);
+
+            Assert.Equal(5, clamped.Min);
+            Assert.Equal(95, clamped.Max);
+
+            double clampedLength = clamped.Length;
+            Assert.Equal(clamped.Min - clampedLength * 0.1, visible.Min, 6);
+            Assert.Equal(clamped.Max + clampedLength * 0.1, visible.Max, 6);
+        });
+    }
+
+    [Fact]
+    public void OnVisibleRangeChanged_DirectSet_ReappliesLimitAndPadding()
+    {
+        TestHelper.RunInSta(() =>
+        {
+            var axis = new LinearAxis
+            {
+                RangePaddingMin = 0.1,
+                RangePaddingMax = 0.0,
+                VisibleRangeLimitMode = VisibleRangeLimitMode.MinAndMax,
+                VisibleRangeLimit = new DataRange(10, 90)
+            };
+
+            axis.VisibleRange = new DataRange(0, 100);
+
+            var core = CallReverseRelativeRangePadding(axis, axis.VisibleRange);
+            Assert.True(core.Min >= 10, $"core.Min={core.Min} should be >= 10");
+            Assert.True(core.Max <= 90, $"core.Max={core.Max} should be <= 90");
+        });
+    }
+
+    [Fact]
+    public void OnVisibleRangeChanged_WithinLimit_KeepsOriginal()
+    {
+        TestHelper.RunInSta(() =>
+        {
+            var axis = new LinearAxis
+            {
+                RangePaddingMin = 0.1,
+                RangePaddingMax = 0.0,
+                VisibleRangeLimitMode = VisibleRangeLimitMode.MinAndMax,
+                VisibleRangeLimit = new DataRange(0, 100)
+            };
+
+            axis.VisibleRange = new DataRange(20, 80);
+
+            var core = CallReverseRelativeRangePadding(axis, axis.VisibleRange);
+            Assert.True(core.Min >= 20, $"VisibleRange should be based on {core.Min}..{core.Max}");
+            Assert.True(core.Max <= 80);
+        });
+    }
+
+    #endregion
+
+    #region VisibleRangeLimit 变更触发
+
+    [Fact]
+    public void OnVisibleRangeLimitChanged_Tighten_MovesCoreRange()
+    {
+        TestHelper.RunInSta(() =>
+        {
+            var axis = new LinearAxis
+            {
+                CoreRange = new DataRange(0, 100),
+                VisibleRange = new DataRange(0, 100),
+                VisibleRangeLimitMode = VisibleRangeLimitMode.MinAndMax,
+                VisibleRangeLimit = new DataRange(0, 100)
+            };
+
+            // 收紧 limit
+            axis.VisibleRangeLimit = new DataRange(20, 80);
+
+            Assert.True(axis.CoreRange.Min >= 20, $"CoreRange.Min={axis.CoreRange.Min}");
+            Assert.True(axis.CoreRange.Max <= 80, $"CoreRange.Max={axis.CoreRange.Max}");
+        });
+    }
+
+    [Fact]
+    public void OnVisibleRangeLimitModeChanged_EnableMinOnly_Clamps()
+    {
+        TestHelper.RunInSta(() =>
+        {
+            var axis = new LinearAxis
+            {
+                CoreRange = new DataRange(-10, 50),
+                VisibleRange = new DataRange(-10, 50),
+                VisibleRangeLimit = new DataRange(0, 100),
+                VisibleRangeLimitMode = VisibleRangeLimitMode.None
+            };
+
+            axis.VisibleRangeLimitMode = VisibleRangeLimitMode.MinOnly;
+
+            Assert.True(axis.CoreRange.Min >= 0, $"CoreRange.Min={axis.CoreRange.Min}");
+        });
+    }
+
+    #endregion
+
+    #region Bar 柱状图范围
+
+    [Fact]
+    public void AdjustXRangeForBars_ExtendsBothSidesByHalfBar()
+    {
+        var barSeries = new BarRenderableSeries
+        {
+            BarSpacing = 0.3,
+            DataSeries = CreateSequentialData(0, 10)
+        };
+        var group = new[] { barSeries as IRenderableSeries }.GroupBy(s => "X").First();
+
+        var niceRange = new DataRange(0, 9);
+        var result = CallAdjustXRangeForBars(niceRange, group);
+
+        Assert.True(result.Min < 0, $"Min={result.Min} should be < 0");
+        Assert.True(result.Max > 9, $"Max={result.Max} should be > 9");
+    }
+
+    [Fact]
+    public void AdjustXRangeForBars_WithBarWidth_RespectsWidth()
+    {
+        var barSeries = new BarRenderableSeries
+        {
+            BarSpacing = 0.2,
+            BarWidth = 0.3,
+            DataSeries = CreateSequentialData(5, 5)
+        };
+        var group = new[] { barSeries as IRenderableSeries }.GroupBy(s => "X").First();
+
+        var niceRange = new DataRange(5, 9);
+        var result = CallAdjustXRangeForBars(niceRange, group);
+
+        Assert.Equal(5 - 0.15, result.Min, 6);
+        Assert.Equal(9 + 0.15, result.Max, 6);
+    }
+
+    [Fact]
+    public void AdjustYRangeForBarBaseline_AllPositive_IncludesZero()
+    {
+        TestHelper.RunInSta(() =>
+        {
+            var chart = new Chart();
+            chart.Series = new ObservableCollection<IRenderableSeries>
+            {
+                new BarRenderableSeries
+                {
+                    YAxisId = "Y",
+                    DataSeries = CreateSequentialData(0, 3)
+                }
+            };
+            var range = new DataRange(10, 50);
+            var result = CallAdjustYRangeForBarBaseline(chart, "Y", range);
+
+            Assert.Equal(0, result.Min);
+            Assert.Equal(50, result.Max);
+        });
+    }
+
+    [Fact]
+    public void AdjustYRangeForBarBaseline_AllNegative_IncludesZero()
+    {
+        TestHelper.RunInSta(() =>
+        {
+            var chart = new Chart();
+            chart.Series = new ObservableCollection<IRenderableSeries>
+            {
+                new BarRenderableSeries
+                {
+                    YAxisId = "Y",
+                    DataSeries = CreateSequentialData(0, 3)
+                }
+            };
+            var range = new DataRange(-50, -10);
+            var result = CallAdjustYRangeForBarBaseline(chart, "Y", range);
+
+            Assert.Equal(-50, result.Min);
+            Assert.Equal(0, result.Max);
+        });
+    }
+
+    [Fact]
+    public void AdjustYRangeForBarBaseline_CrossesZero_NoAdjustment()
+    {
+        TestHelper.RunInSta(() =>
+        {
+            var chart = new Chart();
+            chart.Series = new ObservableCollection<IRenderableSeries>
+            {
+                new BarRenderableSeries
+                {
+                    YAxisId = "Y",
+                    DataSeries = CreateSequentialData(0, 3)
+                }
+            };
+            var range = new DataRange(-10, 30);
+            var result = CallAdjustYRangeForBarBaseline(chart, "Y", range);
+
+            Assert.Equal(range.Min, result.Min);
+            Assert.Equal(range.Max, result.Max);
+        });
+    }
+
+    private static UniformDataSeries<double, double> CreateSequentialData(double start, int count)
+    {
+        var ds = new UniformDataSeries<double, double>(i => start + i, x => x);
+        for (int i = 0; i < count; i++)
+            ds.Append(i * 10.0);
+        return ds;
+    }
+
+    private static DataRange CallAdjustXRangeForBars(DataRange niceRange,
+        IGrouping<string, IRenderableSeries> barGroup)
+    {
+        var method = typeof(Chart).GetMethod("AdjustXRangeForBars",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        return (DataRange)method!.Invoke(null, [niceRange, barGroup])!;
+    }
+
+    private static DataRange CallAdjustYRangeForBarBaseline(Chart chart, string axisId, DataRange range)
+    {
+        var method = typeof(Chart).GetMethod("AdjustYRangeForBarBaseline",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        return (DataRange)method!.Invoke(chart, [axisId, range])!;
+    }
+
+    #endregion
+
+    #region CoreRange 与 VisibleRange 关系
+
+    [Fact]
+    public void CoreRange_And_VisibleRange_DifferByPaddingOnly()
+    {
+        TestHelper.RunInSta(() =>
+        {
+            var axis = new LinearAxis
+            {
+                RangePaddingMin = 0.1,
+                RangePaddingMax = 0.1,
+                CoreRange = new DataRange(0, 100)
+            };
+            axis.VisibleRange = axis.ApplyRelativeRangePadding(axis.CoreRange);
+
+            double expectedPad = 100 * 0.1;
+            Assert.Equal(axis.CoreRange.Min - expectedPad, axis.VisibleRange.Min, 6);
+            Assert.Equal(axis.CoreRange.Max + expectedPad, axis.VisibleRange.Max, 6);
+            Assert.True(axis.VisibleRange.Length > axis.CoreRange.Length);
+        });
+    }
+
+    [Fact]
+    public void CoreRange_DefaultValue_IsZeroRange()
+    {
+        TestHelper.RunInSta(() =>
+        {
+            var axis = new LinearAxis();
+            Assert.Equal(0, axis.CoreRange.Length);
+        });
+    }
+
+    #endregion
 }

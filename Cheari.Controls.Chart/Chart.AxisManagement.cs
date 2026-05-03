@@ -11,6 +11,7 @@ using Cheari.Controls.Data;
 using Cheari.Controls.Rendering;
 using Cheari.Controls.Rendering.Context;
 using Cheari.Controls.Series;
+using Cheari.Controls.Series.Types;
 
 namespace Cheari.Controls;
 
@@ -55,6 +56,20 @@ public partial class Chart
     {
         if (d is Chart chart)
         {
+            if (!chart._syncingRange && !Equals(e.NewValue, e.OldValue))
+            {
+                var isXRange = e.Property == XRangeProperty;
+                var defaultAxis = isXRange
+                    ? FindAxis(chart.XAxes, DefaultXAxisId)
+                    : FindAxis(chart.YAxes, DefaultYAxisId);
+
+                if (defaultAxis != null && defaultAxis.AutoRange)
+                {
+                    chart.SetCurrentValue(e.Property, defaultAxis.VisibleRange);
+                    return;
+                }
+            }
+
             chart.SyncRangeToAxes();
             chart.SignalViewportChanged();
         }
@@ -107,6 +122,43 @@ public partial class Chart
     private void OnAxisAutoRangeChanged(object? sender, EventArgs e)
     {
         RefreshAutoRangeAxisState();
+        if (sender is IAxis axis && axis.AutoRange)
+            ScheduleAutoRangeRecalcForAxis(axis.Id);
+    }
+
+    private void OnAxisRangePaddingChanged(object? sender, EventArgs e)
+    {
+        if (sender is IAxis axis && axis.AutoRange)
+            ScheduleAutoRangeRecalcForAxis(axis.Id);
+    }
+
+    private void OnAxisVisibleRangeLimitChanged(object? sender, EventArgs e)
+    {
+        if (sender is IAxis axis && axis.AutoRange)
+            ScheduleAutoRangeRecalcForAxis(axis.Id);
+    }
+
+    private void OnAxisVisibleRangeLimitModeChanged(object? sender, EventArgs e)
+    {
+        if (sender is IAxis axis && axis.AutoRange)
+            ScheduleAutoRangeRecalcForAxis(axis.Id);
+    }
+
+    private void ScheduleAutoRangeRecalcForAxis(string axisId)
+    {
+        if (FindAxis(XAxes, axisId) != null)
+            _pendingAutoRangeXAxisIds.Add(axisId);
+        if (FindAxis(YAxes, axisId) != null)
+            _pendingAutoRangeYAxisIds.Add(axisId);
+
+        if (_autoRangeUpdateScheduled
+            || (_pendingAutoRangeXAxisIds.Count == 0 && _pendingAutoRangeYAxisIds.Count == 0))
+        {
+            return;
+        }
+
+        _autoRangeUpdateScheduled = true;
+        Dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(FlushPendingAutoRangeUpdates));
     }
 
     private void SubscribeToAxes(IEnumerable<IAxis> axes)
@@ -131,6 +183,10 @@ public partial class Chart
         s_axisPlacementDescriptor?.AddValueChanged(axisBase, OnAxisPlacementChanged);
         s_axisForegroundDescriptor?.AddValueChanged(axisBase, OnAxisForegroundChanged);
         s_axisAutoRangeDescriptor?.AddValueChanged(axisBase, OnAxisAutoRangeChanged);
+        s_axisRangePaddingMinDescriptor?.AddValueChanged(axisBase, OnAxisRangePaddingChanged);
+        s_axisRangePaddingMaxDescriptor?.AddValueChanged(axisBase, OnAxisRangePaddingChanged);
+        s_axisVisibleRangeLimitDescriptor?.AddValueChanged(axisBase, OnAxisVisibleRangeLimitChanged);
+        s_axisVisibleRangeLimitModeDescriptor?.AddValueChanged(axisBase, OnAxisVisibleRangeLimitModeChanged);
     }
 
     private void UnsubscribeFromAxis(IAxis axis)
@@ -143,6 +199,10 @@ public partial class Chart
         s_axisPlacementDescriptor?.RemoveValueChanged(axisBase, OnAxisPlacementChanged);
         s_axisForegroundDescriptor?.RemoveValueChanged(axisBase, OnAxisForegroundChanged);
         s_axisAutoRangeDescriptor?.RemoveValueChanged(axisBase, OnAxisAutoRangeChanged);
+        s_axisRangePaddingMinDescriptor?.RemoveValueChanged(axisBase, OnAxisRangePaddingChanged);
+        s_axisRangePaddingMaxDescriptor?.RemoveValueChanged(axisBase, OnAxisRangePaddingChanged);
+        s_axisVisibleRangeLimitDescriptor?.RemoveValueChanged(axisBase, OnAxisVisibleRangeLimitChanged);
+        s_axisVisibleRangeLimitModeDescriptor?.RemoveValueChanged(axisBase, OnAxisVisibleRangeLimitModeChanged);
     }
 
     private void SyncRangeToAxes()
@@ -266,14 +326,34 @@ public partial class Chart
 
     private void EnsureDefaultAxes()
     {
-        if (XAxes is null || XAxes.Count == 0)
+        if (XAxes is null)
         {
             XAxes = CreateDefaultXAxes();
         }
+        else if (XAxes.Count == 0)
+        {
+            XAxes.Add(new LinearAxis
+            {
+                Id = DefaultXAxisId,
+                Placement = AxisPlacement.Bottom,
+                VisibleRange = new DataRange(0, 100),
+                AutoRange = true
+            });
+        }
 
-        if (YAxes is null || YAxes.Count == 0)
+        if (YAxes is null)
         {
             YAxes = CreateDefaultYAxes();
+        }
+        else if (YAxes.Count == 0)
+        {
+            YAxes.Add(new LinearAxis
+            {
+                Id = DefaultYAxisId,
+                Placement = AxisPlacement.Left,
+                VisibleRange = new DataRange(-1, 1),
+                AutoRange = true
+            });
         }
     }
 
@@ -348,6 +428,24 @@ public partial class Chart
         Dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(FlushPendingAutoRangeUpdates));
     }
 
+    private void QueueAutoRangeForNewSeries(IRenderableSeries renderableSeries)
+    {
+        var xAxisId = renderableSeries.XAxisId;
+        var yAxisId = renderableSeries.YAxisId;
+
+        if (FindAxis(XAxes, xAxisId) is { AutoRange: true })
+            _pendingAutoRangeXAxisIds.Add(xAxisId);
+        if (FindAxis(YAxes, yAxisId) is { AutoRange: true })
+            _pendingAutoRangeYAxisIds.Add(yAxisId);
+
+        if ((_pendingAutoRangeXAxisIds.Count > 0 || _pendingAutoRangeYAxisIds.Count > 0)
+            && !_autoRangeUpdateScheduled)
+        {
+            _autoRangeUpdateScheduled = true;
+            Dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(FlushPendingAutoRangeUpdates));
+        }
+    }
+
     private void QueueBackgroundAutoRangeUpdate(IDataSeries dataSeries)
     {
         if (!HasAnyAutoRangeAxis())
@@ -411,129 +509,59 @@ public partial class Chart
         if (!axis.AutoRange)
             return;
 
-        var relatedSeries = Series
+        var relatedRenderableSeries = Series
             .Where(s => s.IsVisible
                 && s.DataSeries != null
                 && (isXAxis ? s.XAxisId == axisId : s.YAxisId == axisId))
+            .ToArray();
+
+        if (relatedRenderableSeries.Length == 0)
+            return;
+
+        var relatedSeries = relatedRenderableSeries
             .Select(s => s.DataSeries!)
             .ToArray();
 
-        if (relatedSeries.Length == 0)
-            return;
+        var coreRange = axis.CalculateAutoRange(relatedSeries);
 
-        if (!isXAxis)
+        if (isXAxis && relatedRenderableSeries.Any(s => s is BarRenderableSeries))
         {
-            var defaultXAxis = FindAxis(XAxes, DefaultXAxisId);
-            if (defaultXAxis != null && !defaultXAxis.AutoRange)
-            {
-                var visibleRange = ComputeVisibleYRange(
-                    relatedSeries, defaultXAxis.VisibleRange, axis);
-                YRange = visibleRange;
-                return;
-            }
+            var barGroup = relatedRenderableSeries.GroupBy(s => s.XAxisId).First();
+            coreRange = AdjustXRangeForBars(coreRange, barGroup);
+        }
+        else if (!isXAxis)
+        {
+            coreRange = AdjustYRangeForBarBaseline(axisId, coreRange);
         }
 
-        var range = axis.CalculateAutoRange(relatedSeries);
-        if (isXAxis)
+        DataRange clampedCore = coreRange;
+        if (axis is AxisBase xBase)
         {
-            if (axis.Id == DefaultXAxisId)
-                XRange = range;
-            else
-                axis.VisibleRange = range;
+            clampedCore = xBase.ClampToVisibleRangeLimit(coreRange);
+            coreRange = xBase.ApplyRelativeRangePadding(clampedCore);
         }
-        else
-        {
-            if (axis.Id == DefaultYAxisId)
-                YRange = range;
-            else
-                axis.VisibleRange = range;
-        }
+
+        axis.VisibleRange = coreRange;
+        axis.CoreRange = clampedCore;
     }
 
-    private DataRange ComputeVisibleYRange(
-        IDataSeries[] dataSeries,
-        DataRange visibleXRange,
-        IAxis yAxis)
+    private DataRange AdjustYRangeForBarBaseline(string axisId, DataRange range)
     {
-        double minY = double.MaxValue;
-        double maxY = double.MinValue;
-        bool hasData = false;
+        if (Series == null)
+            return range;
 
-        for (int s = 0; s < dataSeries.Length; s++)
+        for (int i = 0; i < Series.Count; i++)
         {
-            var series = dataSeries[s];
-            DataFrame? frame = null;
-
-            if (_renderLoop != null
-                && _renderLoop.TryGetLatestFrame(series, series.Version, out var cachedFrame)
-                && cachedFrame != null)
+            if (Series[i].YAxisId == axisId && Series[i] is BarRenderableSeries)
             {
-                frame = cachedFrame;
-            }
-            else if (series is IDataFrameProvider provider)
-            {
-                frame = provider.CreateFrame();
-            }
-
-            if (frame == null || frame.XValues == null || frame.YValues == null || frame.Count < 1)
-                continue;
-
-            int startIdx = BinarySearchFirstGreaterOrEqual(
-                new ReadOnlySpan<float>(frame.XValues, 0, frame.Count),
-                (float)visibleXRange.Min);
-
-            int endIdx = BinarySearchLastLessOrEqual(
-                new ReadOnlySpan<float>(frame.XValues, 0, frame.Count),
-                (float)visibleXRange.Max);
-
-            if (endIdx < startIdx)
-                continue;
-
-            for (int i = startIdx; i <= endIdx && i < frame.Count; i++)
-            {
-                float y = frame.YValues[i];
-                if (float.IsNaN(y) || float.IsInfinity(y))
-                    continue;
-
-                minY = Math.Min(minY, y);
-                maxY = Math.Max(maxY, y);
-                hasData = true;
+                if (range.Min > 0)
+                    return new DataRange(0, range.Max);
+                else if (range.Max < 0)
+                    return new DataRange(range.Min, 0);
+                break;
             }
         }
-
-        return hasData
-            ? AxisBase.CalculateStaticNiceRange(minY, maxY)
-            : new DataRange(-1, 1);
-    }
-
-    private static int BinarySearchFirstGreaterOrEqual(ReadOnlySpan<float> values, float target)
-    {
-        int lo = 0;
-        int hi = values.Length - 1;
-        while (lo < hi)
-        {
-            int mid = lo + (hi - lo) / 2;
-            if (values[mid] < target)
-                lo = mid + 1;
-            else
-                hi = mid;
-        }
-        return lo;
-    }
-
-    private static int BinarySearchLastLessOrEqual(ReadOnlySpan<float> values, float target)
-    {
-        int lo = 0;
-        int hi = values.Length - 1;
-        while (lo < hi)
-        {
-            int mid = lo + (hi - lo + 1) / 2;
-            if (values[mid] > target)
-                hi = mid - 1;
-            else
-                lo = mid;
-        }
-        return lo;
+        return range;
     }
 
     private void ApplyRenderContextAxisRangeChange(string axisId, DataRange range)

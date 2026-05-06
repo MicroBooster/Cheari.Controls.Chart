@@ -99,12 +99,10 @@ public class PanModifier : IChartModifier
             if (canPanX && defaultXAxis is AxisBase xBase)
             {
                 newXRange = xBase.ClampToVisibleRangeLimit(newXRange);
-                newXRange = xBase.ApplyRelativeRangePadding(newXRange);
             }
             if (canPanY && defaultYAxis is AxisBase yBase)
             {
                 newYRange = yBase.ClampToVisibleRangeLimit(newYRange);
-                newYRange = yBase.ApplyRelativeRangePadding(newYRange);
             }
 
             _context.SetRange(newXRange, newYRange);
@@ -118,7 +116,6 @@ public class PanModifier : IChartModifier
                     if (axis is AxisBase xb)
                     {
                         range = xb.ClampToVisibleRangeLimit(range);
-                        range = xb.ApplyRelativeRangePadding(range);
                     }
                     _context.SetAxisRange(axis.Id, range);
                 }
@@ -133,7 +130,6 @@ public class PanModifier : IChartModifier
                     if (axis is AxisBase yb)
                     {
                         range = yb.ClampToVisibleRangeLimit(range);
-                        range = yb.ApplyRelativeRangePadding(range);
                     }
                     _context.SetAxisRange(axis.Id, range);
                 }
@@ -175,6 +171,7 @@ public class PanModifier : IChartModifier
 
         double newMin = mapper.ScreenToData(-deltaX, range, viewportWidth);
         double newMax = mapper.ScreenToData(viewportWidth - deltaX, range, viewportWidth);
+
         return new DataRange(newMin, newMax);
     }
 

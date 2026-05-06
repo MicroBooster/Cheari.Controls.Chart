@@ -1,3 +1,4 @@
+using System.Windows;
 using Cheari.Controls.Data;
 using Cheari.Controls.Core;
 using Cheari.Controls.Axes.CoordinateMappers;
@@ -5,104 +6,131 @@ using Cheari.Controls.Axes.CoordinateMappers;
 namespace Cheari.Controls.Axes;
 
 /// <summary>
-/// 对数坐标轴，以10为底的对数刻度。
+/// 对数坐标轴，支持自定义底数的对数刻度。
 /// </summary>
 public class LogAxis : AxisBase
 {
-    /// <summary>
-    /// 获取轴的刻度类型，返回对数刻度。
-    /// </summary>
+    public static readonly DependencyProperty BaseProperty = DependencyProperty.Register(
+        nameof(Base), typeof(double), typeof(LogAxis),
+        new PropertyMetadata(10.0, OnBaseChanged));
+
     public override AxisScale Scale => AxisScale.Logarithmic;
 
-    /// <summary>
-    /// 获取坐标映射器，返回对数坐标映射器实例。
-    /// </summary>
-    public override ICoordinateMapper CoordinateMapper => LogCoordinateMapper.Instance;
+    private LogCoordinateMapper? _coordinateMapper;
 
-    /// <summary>
-    /// 初始化 LogAxis 类的新实例。
-    /// </summary>
+    public override ICoordinateMapper CoordinateMapper
+    {
+        get
+        {
+            double b = Base;
+            if (b <= 1.0) b = 10.0;
+            return _coordinateMapper ??= new LogCoordinateMapper(b);
+        }
+    }
+
+    public double Base
+    {
+        get => (double)GetValue(BaseProperty);
+        set => SetValue(BaseProperty, value);
+    }
+
     public LogAxis()
     {
         Placement = AxisPlacement.Left;
         VisibleRange = new DataRange(0.1, 1000);
     }
 
-    /// <summary>
-    /// 获取主刻度信息数组。
-    /// </summary>
-    /// <param name="viewportSize">视口大小</param>
-    /// <returns>刻度信息数组</returns>
     public override TickInfo[] GetMajorTicks(double viewportSize)
     {
         var range = VisibleRange;
-
-        if (range.Min <= 0 || range.Max <= 0)
+        if (double.IsNaN(range.Min) || double.IsNaN(range.Max) ||
+            double.IsInfinity(range.Min) || double.IsInfinity(range.Max) ||
+            range.Min <= 0 || range.Max <= 0)
             return Array.Empty<TickInfo>();
 
-        var ticks = new List<TickInfo>();
+        double b = Base <= 1.0 ? 10.0 : Base;
+        double invLogB = 1.0 / Math.Log(b);
 
-        int minPow = (int)Math.Floor(Math.Log10(range.Min));
-        int maxPow = (int)Math.Ceiling(Math.Log10(range.Max));
+        double logMin = Math.Log(range.Min) * invLogB;
+        double logMax = Math.Log(range.Max) * invLogB;
+        double logRange = logMax - logMin;
+        if (logRange <= 0)
+            return Array.Empty<TickInfo>();
 
-        for (int p = minPow; p <= maxPow; p++)
+        switch (TickCalculationMode)
         {
-            double baseValue = Math.Pow(10, p);
-
-            foreach (double multiplier in s_majorMultipliers)
+            case TickCalculationMode.FixedCount:
             {
-                double value = baseValue * multiplier;
-                if (value < range.Min || value > range.Max)
-                    continue;
+                if (MajorTickCount < 2)
+                    goto case TickCalculationMode.Auto;
+                double fixedLogInterval = logRange / (MajorTickCount - 1);
+                return GenerateLogTicks(range, logMin, logMax, fixedLogInterval, b);
+            }
 
-                string label = LabelFormat != null
-                    ? value.ToString(LabelFormat)
-                    : FormatLogValue(value);
-                ticks.Add(new TickInfo(value, label));
+            case TickCalculationMode.FixedInterval:
+            {
+                if (MajorTickInterval <= 0)
+                    goto case TickCalculationMode.Auto;
+                double logInterval = MajorTickInterval;
+                if (AlignRangeToTicks)
+                {
+                    int nIntervals = Math.Max(1, (int)Math.Round(logRange / logInterval));
+                    logInterval = logRange / nIntervals;
+                }
+                return GenerateLogTicks(range, logMin, logMax, logInterval, b);
+            }
+
+            case TickCalculationMode.Auto:
+            default:
+            {
+                double maxTicks = Math.Max(2, viewportSize / 60.0);
+                double logInterval = CalculateNiceInterval(logRange, maxTicks);
+                if (AlignRangeToTicks)
+                {
+                    int nIntervals = Math.Max(1, (int)Math.Round(logRange / logInterval));
+                    logInterval = logRange / nIntervals;
+                }
+                return GenerateLogTicks(range, logMin, logMax, logInterval, b);
             }
         }
-
-        if (AlignRangeToTicks && ticks.Count > 0)
-        {
-            double firstTick = ticks[0].Position;
-            double lastTick = ticks[^1].Position;
-            if (firstTick != range.Min || lastTick != range.Max)
-            {
-                ticks.Insert(0, new TickInfo(range.Min,
-                    LabelFormat != null ? range.Min.ToString(LabelFormat) : FormatLogValue(range.Min)));
-                ticks.Add(new TickInfo(range.Max,
-                    LabelFormat != null ? range.Max.ToString(LabelFormat) : FormatLogValue(range.Max)));
-            }
-        }
-
-        return ticks.ToArray();
     }
 
-    /// <summary>
-    /// 获取次刻度信息数组。
-    /// </summary>
-    /// <param name="viewportSize">视口大小</param>
-    /// <returns>刻度信息数组</returns>
     public override TickInfo[] GetMinorTicks(double viewportSize)
     {
         var range = VisibleRange;
-
-        if (range.Min <= 0 || range.Max <= 0)
+        if (double.IsNaN(range.Min) || double.IsNaN(range.Max) ||
+            double.IsInfinity(range.Min) || double.IsInfinity(range.Max) ||
+            range.Min <= 0 || range.Max <= 0)
             return Array.Empty<TickInfo>();
 
-        var ticks = new List<TickInfo>();
+        double b = Base <= 1.0 ? 10.0 : Base;
+        double invLogB = 1.0 / Math.Log(b);
 
-        int minPow = (int)Math.Floor(Math.Log10(range.Min));
-        int maxPow = (int)Math.Ceiling(Math.Log10(range.Max));
+        int minPow = (int)Math.Floor(Math.Log(range.Min) * invLogB);
+        int maxPow = (int)Math.Ceiling(Math.Log(range.Max) * invLogB);
 
-        for (int p = minPow; p <= maxPow; p++)
+        int powerCount = maxPow - minPow + 1;
+        const int maxPowerCount = 50;
+        if (powerCount > maxPowerCount)
         {
-            double baseValue = Math.Pow(10, p);
+            int step = (int)Math.Ceiling((double)powerCount / maxPowerCount);
+            minPow = (minPow / step) * step;
+            maxPow = (maxPow / step + 1) * step;
+        }
 
-            for (int i = 2; i <= 9; i++)
+        var ticks = new List<TickInfo>();
+        const int maxMinorTicks = 200;
+        double epsilon = range.Min * 1e-12;
+        for (int p = minPow; p <= maxPow && ticks.Count < maxMinorTicks; p++)
+        {
+            double baseValue = Math.Pow(b, p);
+            if (double.IsInfinity(baseValue))
+                break;
+
+            for (int i = 2; i <= 9 && ticks.Count < maxMinorTicks; i++)
             {
                 double value = baseValue * i;
-                if (value < range.Min || value > range.Max)
+                if (value < range.Min - epsilon || value > range.Max + epsilon)
                     continue;
 
                 ticks.Add(new TickInfo(value, string.Empty));
@@ -112,11 +140,6 @@ public class LogAxis : AxisBase
         return ticks.ToArray();
     }
 
-    /// <summary>
-    /// 根据数据系列计算自动范围。
-    /// </summary>
-    /// <param name="dataSeries">数据系列集合</param>
-    /// <returns>计算得到的自动范围</returns>
     public override DataRange CalculateAutoRange(IEnumerable<IDataSeries> dataSeries)
     {
         double min = double.MaxValue;
@@ -142,33 +165,60 @@ public class LogAxis : AxisBase
         if (min <= 0)
             min = 0.1;
 
-        int minPow = (int)Math.Floor(Math.Log10(min));
-        int maxPow = (int)Math.Ceiling(Math.Log10(max));
-
-        return new DataRange(Math.Pow(10, minPow), Math.Pow(10, maxPow));
+        return new DataRange(min, max);
     }
 
-    /// <summary>
-    /// 格式化对数值的显示标签。
-    /// </summary>
-    /// <param name="value">要格式化的数值</param>
-    /// <returns>格式化后的字符串</returns>
+    private TickInfo[] GenerateLogTicks(DataRange range, double logMin, double logMax,
+        double logInterval, double b)
+    {
+        if (logInterval <= 0)
+            return Array.Empty<TickInfo>();
+
+        double firstLog;
+        if (TickCalculationMode == TickCalculationMode.FixedCount || AlignRangeToTicks)
+        {
+            firstLog = logMin;
+        }
+        else
+        {
+            firstLog = Math.Ceiling(logMin / logInterval) * logInterval;
+        }
+
+        var ticks = new List<TickInfo>();
+        double epsilon = logInterval * 0.001;
+
+        for (double logPos = firstLog; logPos <= logMax + epsilon; logPos += logInterval)
+        {
+            double value = Math.Pow(b, logPos);
+            if (logPos < logMin - epsilon || logPos > logMax + epsilon)
+                continue;
+
+            string label = LabelFormat != null
+                ? value.ToString(LabelFormat)
+                : FormatLogValue(value);
+            ticks.Add(new TickInfo(value, label));
+        }
+
+        return ticks.ToArray();
+    }
+
     private static string FormatLogValue(double value)
     {
-        double absValue = Math.Abs(value);
-        if (absValue >= 1e6)
-            return value.ToString("0.#e+0");
-        if (absValue >= 1000)
-            return value.ToString("F0");
-        if (absValue >= 1)
-            return value.ToString("F1");
-        if (absValue >= 0.01)
-            return value.ToString("F3");
-        return value.ToString("0.#e+0");
+        if (double.IsNaN(value) || double.IsInfinity(value))
+            return string.Empty;
+        if (Math.Abs(value) >= 1e6 || (Math.Abs(value) < 1e-4 && value != 0))
+            return value.ToString("0.##E+0");
+        if (Math.Abs(value) >= 10000)
+            return value.ToString("0.#E+0");
+        return value.ToString("G3");
     }
 
-    /// <summary>
-    /// 主刻度乘数数组（1, 2, 5），用于在每个数量级内生成主刻度。
-    /// </summary>
-    private static readonly double[] s_majorMultipliers = [1, 2, 5];
+    private static void OnBaseChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is LogAxis axis && (double)e.NewValue > 1.0)
+        {
+            axis._coordinateMapper = null;
+            axis.VisibleRange = new DataRange(0.1, 1000);
+        }
+    }
 }

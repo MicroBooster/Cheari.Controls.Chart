@@ -54,7 +54,7 @@ public interface IAxis
 
     /// <summary>
     /// 获取核心数据范围（不含留白），用于渲染时裁剪曲线数据。
-    /// AutoRange=true 时为核心数据范围，AutoRange=false 时为 VisibleRange 反向扣除留白。
+    /// 自动适配时表示原始核心数据范围；手动范围模式下通常与 <see cref="VisibleRange"/> 一致。
     /// </summary>
     DataRange CoreRange { get; set; }
 

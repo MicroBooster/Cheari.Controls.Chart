@@ -184,6 +184,9 @@
                             <ListBoxItem Tag="RangePaddingDemoView">
                                 <local:NavItem Icon="&#x2194;" Title="坐标轴留白" />
                             </ListBoxItem>
+                            <ListBoxItem Tag="LogRangePaddingDemoView">
+                                <local:NavItem Icon="&#x221E;" Title="对数轴留白" />
+                            </ListBoxItem>
                             <ListBoxItem Tag="InteractionDemoView">
                                 <local:NavItem Icon="&#x263C;" Title="交互修饰器" />
                             </ListBoxItem>

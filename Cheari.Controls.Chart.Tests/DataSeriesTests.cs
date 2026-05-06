@@ -418,6 +418,149 @@ public class DataSeriesTests
     }
 
     [Fact]
+    public void Chart_ZoomExtents_WithPlotAreaMargin_LinearAxis_KeepsEndpointsInsideViewport()
+    {
+        RunInSta(() =>
+        {
+            var dataSeries = new VariableDataSeries<double, double>(x => x);
+            dataSeries.Append(1, 3);
+            dataSeries.Append(2, 17);
+            dataSeries.Append(3, 8);
+
+            var xAxis = new LinearAxis
+            {
+                Id = Chart.DefaultXAxisId,
+                Placement = AxisPlacement.Bottom
+            };
+            var yAxis = new LinearAxis
+            {
+                Id = Chart.DefaultYAxisId,
+                Placement = AxisPlacement.Left
+            };
+
+            var chart = new Chart
+            {
+                Template = CreateChartTemplate(),
+                PlotAreaMargin = new Thickness(18, 10, 24, 12),
+                XAxes = [xAxis],
+                YAxes = [yAxis],
+                Series =
+                [
+                    new LineRenderableSeries
+                    {
+                        DataSeries = dataSeries,
+                        StrokeThickness = 2,
+                        XAxisId = Chart.DefaultXAxisId,
+                        YAxisId = Chart.DefaultYAxisId
+                    }
+                ]
+            };
+
+            var expectedX = xAxis.CalculateAutoRange([dataSeries]);
+            var expectedY = yAxis.CalculateAutoRange([dataSeries]);
+
+            RunInWindow(chart, new Size(280, 180), control =>
+            {
+                var surface = GetTemplatePart<FrameworkElement>(control, "PART_Surface");
+                var gridLines = GetTemplatePart<GridLinesControl>(control, "PART_GridLines");
+
+                Assert.True(surface.ActualWidth < gridLines.ActualWidth);
+                Assert.True(surface.ActualHeight < gridLines.ActualHeight);
+
+                control.ZoomExtents();
+
+                Assert.Equal(expectedX.Min, xAxis.CoreRange.Min, 10);
+                Assert.Equal(expectedX.Max, xAxis.CoreRange.Max, 10);
+                Assert.Equal(expectedY.Min, yAxis.CoreRange.Min, 10);
+                Assert.Equal(expectedY.Max, yAxis.CoreRange.Max, 10);
+
+                Assert.True(xAxis.VisibleRange.Min < xAxis.CoreRange.Min);
+                Assert.True(xAxis.VisibleRange.Max > xAxis.CoreRange.Max);
+                Assert.True(yAxis.VisibleRange.Min < yAxis.CoreRange.Min);
+                Assert.True(yAxis.VisibleRange.Max > yAxis.CoreRange.Max);
+
+                Assert.Equal(xAxis.VisibleRange.Min, control.XRange.Min, 10);
+                Assert.Equal(xAxis.VisibleRange.Max, control.XRange.Max, 10);
+                Assert.Equal(yAxis.VisibleRange.Min, control.YRange.Min, 10);
+                Assert.Equal(yAxis.VisibleRange.Max, control.YRange.Max, 10);
+                AssertLineSeriesGeometryInsideViewport(surface, xAxis, yAxis, control.XRange, control.YRange, dataSeries, strokeThickness: 2);
+            });
+        });
+    }
+
+    [Fact]
+    public void Chart_ZoomExtents_WithPlotAreaMargin_LogAxes_KeepEndpointsInsideViewport()
+    {
+        RunInSta(() =>
+        {
+            var dataSeries = new VariableDataSeries<double, double>(x => x);
+            dataSeries.Append(1, 1);
+            dataSeries.Append(5, 5);
+            dataSeries.Append(10, 50);
+            dataSeries.Append(50, 500);
+
+            var xAxis = new LogAxis
+            {
+                Id = Chart.DefaultXAxisId,
+                Placement = AxisPlacement.Bottom
+            };
+            var yAxis = new LogAxis
+            {
+                Id = Chart.DefaultYAxisId,
+                Placement = AxisPlacement.Left
+            };
+
+            var chart = new Chart
+            {
+                Template = CreateChartTemplate(),
+                PlotAreaMargin = new Thickness(16, 14, 20, 8),
+                XAxes = [xAxis],
+                YAxes = [yAxis],
+                Series =
+                [
+                    new LineRenderableSeries
+                    {
+                        DataSeries = dataSeries,
+                        StrokeThickness = 2,
+                        XAxisId = Chart.DefaultXAxisId,
+                        YAxisId = Chart.DefaultYAxisId
+                    }
+                ]
+            };
+
+            var expectedX = xAxis.CalculateAutoRange([dataSeries]);
+            var expectedY = yAxis.CalculateAutoRange([dataSeries]);
+
+            RunInWindow(chart, new Size(280, 180), control =>
+            {
+                var surface = GetTemplatePart<FrameworkElement>(control, "PART_Surface");
+                var gridLines = GetTemplatePart<GridLinesControl>(control, "PART_GridLines");
+
+                Assert.True(surface.ActualWidth < gridLines.ActualWidth);
+                Assert.True(surface.ActualHeight < gridLines.ActualHeight);
+
+                control.ZoomExtents();
+
+                Assert.Equal(expectedX.Min, xAxis.CoreRange.Min, 10);
+                Assert.Equal(expectedX.Max, xAxis.CoreRange.Max, 10);
+                Assert.Equal(expectedY.Min, yAxis.CoreRange.Min, 10);
+                Assert.Equal(expectedY.Max, yAxis.CoreRange.Max, 10);
+
+                Assert.True(xAxis.VisibleRange.Min < xAxis.CoreRange.Min);
+                Assert.True(xAxis.VisibleRange.Max > xAxis.CoreRange.Max);
+                Assert.True(yAxis.VisibleRange.Min < yAxis.CoreRange.Min);
+                Assert.True(yAxis.VisibleRange.Max > yAxis.CoreRange.Max);
+                AssertLineSeriesGeometryInsideViewport(surface, xAxis, yAxis, control.XRange, control.YRange, dataSeries, strokeThickness: 2);
+
+                Assert.Equal(xAxis.VisibleRange.Min, control.XRange.Min, 10);
+                Assert.Equal(xAxis.VisibleRange.Max, control.XRange.Max, 10);
+                Assert.Equal(yAxis.VisibleRange.Min, control.YRange.Min, 10);
+                Assert.Equal(yAxis.VisibleRange.Max, control.YRange.Max, 10);
+            });
+        });
+    }
+
+    [Fact]
     public void Chart_AutoRange_CoalescesDuplicateSeriesNotifications()
     {
         RunInSta(() =>
@@ -454,6 +597,492 @@ public class DataSeriesTests
 
             Assert.Equal(1, xAxis.AutoRangeCallCount);
             Assert.Equal(1, yAxis.AutoRangeCallCount);
+        });
+    }
+
+    [Fact]
+    public void Chart_PlotAreaMargin_Change_RequeuesAutoRange()
+    {
+        RunInSta(() =>
+        {
+            var dataSeries = new UniformDataSeries<double, double>(index => index, x => x);
+            dataSeries.Append(new[] { 1.0, 2.0, 3.0 });
+
+            var xAxis = new CountingLinearAxis
+            {
+                Id = Chart.DefaultXAxisId,
+                Placement = AxisPlacement.Bottom,
+                AutoRange = true
+            };
+            var yAxis = new CountingLinearAxis
+            {
+                Id = Chart.DefaultYAxisId,
+                Placement = AxisPlacement.Left,
+                AutoRange = true
+            };
+
+            var chart = new Chart
+            {
+                Template = CreateChartTemplate(),
+                PlotAreaMargin = new Thickness(0),
+                Series = [new LineRenderableSeries { DataSeries = dataSeries }],
+                XAxes = [xAxis],
+                YAxes = [yAxis]
+            };
+
+            RunInWindow(chart, new Size(280, 180), control =>
+            {
+                PumpDispatcher();
+
+                int xBefore = xAxis.AutoRangeCallCount;
+                int yBefore = yAxis.AutoRangeCallCount;
+
+                control.PlotAreaMargin = new Thickness(20, 10, 18, 12);
+                control.UpdateLayout();
+                PumpDispatcher();
+
+                Assert.True(xAxis.AutoRangeCallCount > xBefore,
+                    $"Expected X auto-range recalculation after PlotAreaMargin change, before={xBefore}, after={xAxis.AutoRangeCallCount}");
+                Assert.True(yAxis.AutoRangeCallCount > yBefore,
+                    $"Expected Y auto-range recalculation after PlotAreaMargin change, before={yBefore}, after={yAxis.AutoRangeCallCount}");
+            });
+        });
+    }
+
+    [Fact]
+    public void Chart_AutoRange_DefaultAxisRanges_UsePaddedVisibleRange()
+    {
+        RunInSta(() =>
+        {
+            var dataSeries = new VariableDataSeries<double, double>(x => x);
+            dataSeries.Append(1, 1);
+            dataSeries.Append(5, 5);
+            dataSeries.Append(10, 50);
+            dataSeries.Append(50, 500);
+
+            var xAxis = new LogAxis
+            {
+                Id = Chart.DefaultXAxisId,
+                Placement = AxisPlacement.Bottom,
+                AutoRange = true
+            };
+            var yAxis = new LogAxis
+            {
+                Id = Chart.DefaultYAxisId,
+                Placement = AxisPlacement.Left,
+                AutoRange = true
+            };
+
+            var chart = new Chart
+            {
+                Template = CreateChartTemplate(),
+                XAxes = [xAxis],
+                YAxes = [yAxis],
+                Series =
+                [
+                    new LineRenderableSeries
+                    {
+                        DataSeries = dataSeries,
+                        StrokeThickness = 2,
+                        XAxisId = Chart.DefaultXAxisId,
+                        YAxisId = Chart.DefaultYAxisId
+                    }
+                ]
+            };
+
+            RunInWindow(chart, new Size(280, 180), control =>
+            {
+                PumpDispatcher();
+
+                Assert.True(xAxis.VisibleRange.Min < xAxis.CoreRange.Min);
+                Assert.True(xAxis.VisibleRange.Max > xAxis.CoreRange.Max);
+                Assert.True(yAxis.VisibleRange.Min < yAxis.CoreRange.Min);
+                Assert.True(yAxis.VisibleRange.Max > yAxis.CoreRange.Max);
+
+                Assert.Equal(xAxis.VisibleRange.Min, control.XRange.Min, 10);
+                Assert.Equal(xAxis.VisibleRange.Max, control.XRange.Max, 10);
+                Assert.Equal(yAxis.VisibleRange.Min, control.YRange.Min, 10);
+                Assert.Equal(yAxis.VisibleRange.Max, control.YRange.Max, 10);
+            });
+        });
+    }
+
+    [Fact]
+    public void Chart_AutoRange_WithDemoLogData_KeepsLineGeometryInsideViewport()
+    {
+        RunInSta(() =>
+        {
+            var dataSeries = new UniformDataSeries<double, double>(index => index + 1, x => x);
+            for (int i = 0; i < 50; i++)
+                dataSeries.Append(Math.Pow(1.25, i));
+
+            var xAxis = new LogAxis
+            {
+                Id = Chart.DefaultXAxisId,
+                Placement = AxisPlacement.Bottom,
+                AutoRange = true
+            };
+            var yAxis = new LogAxis
+            {
+                Id = Chart.DefaultYAxisId,
+                Placement = AxisPlacement.Left,
+                AutoRange = true
+            };
+
+            var chart = new Chart
+            {
+                Template = CreateChartTemplate(),
+                XAxes = [xAxis],
+                YAxes = [yAxis],
+                Series =
+                [
+                    new LineRenderableSeries
+                    {
+                        DataSeries = dataSeries,
+                        StrokeThickness = 2,
+                        XAxisId = Chart.DefaultXAxisId,
+                        YAxisId = Chart.DefaultYAxisId
+                    }
+                ]
+            };
+
+            RunInWindow(chart, new Size(1200, 900), control =>
+            {
+                PumpDispatcher();
+
+                var surface = GetTemplatePart<FrameworkElement>(control, "PART_Surface");
+
+                double xMax = dataSeries.XRange.Max;
+                double yMax = dataSeries.YRange.Max;
+
+                Assert.True(control.XRange.Max > xMax);
+                Assert.True(control.YRange.Max > yMax);
+                AssertLineSeriesGeometryInsideViewport(surface, xAxis, yAxis, control.XRange, control.YRange, dataSeries, strokeThickness: 2);
+            });
+        });
+    }
+
+    [Fact]
+    public void Chart_AutoRange_WithDemoLogData_AndPlotAreaMargin_KeepsLineGeometryInsideViewport()
+    {
+        RunInSta(() =>
+        {
+            var dataSeries = new UniformDataSeries<double, double>(index => index + 1, x => x);
+            for (int i = 0; i < 50; i++)
+                dataSeries.Append(Math.Pow(1.25, i));
+
+            var xAxis = new LogAxis
+            {
+                Id = Chart.DefaultXAxisId,
+                Placement = AxisPlacement.Bottom,
+                AutoRange = true
+            };
+            var yAxis = new LogAxis
+            {
+                Id = Chart.DefaultYAxisId,
+                Placement = AxisPlacement.Left,
+                AutoRange = true
+            };
+
+            var chart = new Chart
+            {
+                Template = CreateChartTemplate(),
+                PlotAreaMargin = new Thickness(30, 20, 30, 0),
+                XAxes = [xAxis],
+                YAxes = [yAxis],
+                Series =
+                [
+                    new LineRenderableSeries
+                    {
+                        DataSeries = dataSeries,
+                        StrokeThickness = 2,
+                        XAxisId = Chart.DefaultXAxisId,
+                        YAxisId = Chart.DefaultYAxisId
+                    }
+                ]
+            };
+
+            RunInWindow(chart, new Size(1200, 900), control =>
+            {
+                PumpDispatcher();
+
+                var surface = GetTemplatePart<FrameworkElement>(control, "PART_Surface");
+                var gridLines = GetTemplatePart<GridLinesControl>(control, "PART_GridLines");
+
+                Assert.True(surface.ActualWidth < gridLines.ActualWidth);
+                Assert.True(surface.ActualHeight < gridLines.ActualHeight);
+
+                double xMax = dataSeries.GetX(dataSeries.Count - 1);
+                double yMax = dataSeries.GetY(dataSeries.Count - 1);
+
+                Assert.True(control.XRange.Max > xMax, $"Expected padded XRange.Max > {xMax}, actual={control.XRange.Max}");
+                Assert.True(control.YRange.Max > yMax, $"Expected padded YRange.Max > {yMax}, actual={control.YRange.Max}");
+                AssertLineSeriesGeometryInsideViewport(surface, xAxis, yAxis, control.XRange, control.YRange, dataSeries, strokeThickness: 2);
+            });
+        });
+    }
+
+    [Fact]
+    public void Chart_ZoomExtents_WithPlotAreaMargin_ScatterGeometry_IsFullyVisible_OnLinearXAxis()
+    {
+        RunInSta(() =>
+        {
+            var dataSeries = new VariableDataSeries<double, double>(x => x);
+            dataSeries.Append(1, 3);
+            dataSeries.Append(2, 6);
+            dataSeries.Append(5, 4);
+            dataSeries.Append(10, 8);
+
+            var xAxis = new LinearAxis
+            {
+                Id = Chart.DefaultXAxisId,
+                Placement = AxisPlacement.Bottom
+            };
+            var yAxis = new LinearAxis
+            {
+                Id = Chart.DefaultYAxisId,
+                Placement = AxisPlacement.Left
+            };
+
+            var scatter = new ScatterRenderableSeries
+            {
+                DataSeries = dataSeries,
+                MarkerSize = 12,
+                XAxisId = Chart.DefaultXAxisId,
+                YAxisId = Chart.DefaultYAxisId
+            };
+
+            var chart = new Chart
+            {
+                Template = CreateChartTemplate(),
+                PlotAreaMargin = new Thickness(14, 12, 18, 10),
+                XAxes = [xAxis],
+                YAxes = [yAxis],
+                Series = [scatter]
+            };
+
+            RunInWindow(chart, new Size(320, 220), control =>
+            {
+                var surface = GetTemplatePart<FrameworkElement>(control, "PART_Surface");
+                control.ZoomExtents();
+
+                AssertScatterSeriesGeometryInsideViewport(surface, xAxis, yAxis, control.XRange, control.YRange, dataSeries, scatter.MarkerSize);
+            });
+        });
+    }
+
+    [Fact]
+    public void Chart_ZoomExtents_WithPlotAreaMargin_ScatterGeometry_IsFullyVisible_OnLogXAxis()
+    {
+        RunInSta(() =>
+        {
+            var dataSeries = new VariableDataSeries<double, double>(x => x);
+            dataSeries.Append(1, 3);
+            dataSeries.Append(2, 6);
+            dataSeries.Append(5, 4);
+            dataSeries.Append(10, 8);
+
+            var xAxis = new LogAxis
+            {
+                Id = Chart.DefaultXAxisId,
+                Placement = AxisPlacement.Bottom
+            };
+            var yAxis = new LinearAxis
+            {
+                Id = Chart.DefaultYAxisId,
+                Placement = AxisPlacement.Left
+            };
+
+            var scatter = new ScatterRenderableSeries
+            {
+                DataSeries = dataSeries,
+                MarkerSize = 16,
+                XAxisId = Chart.DefaultXAxisId,
+                YAxisId = Chart.DefaultYAxisId
+            };
+
+            var chart = new Chart
+            {
+                Template = CreateChartTemplate(),
+                PlotAreaMargin = new Thickness(14, 12, 18, 10),
+                XAxes = [xAxis],
+                YAxes = [yAxis],
+                Series = [scatter]
+            };
+
+            RunInWindow(chart, new Size(320, 220), control =>
+            {
+                var surface = GetTemplatePart<FrameworkElement>(control, "PART_Surface");
+                control.ZoomExtents();
+
+                AssertScatterSeriesGeometryInsideViewport(surface, xAxis, yAxis, control.XRange, control.YRange, dataSeries, scatter.MarkerSize);
+            });
+        });
+    }
+
+    [Fact]
+    public void Chart_ZoomExtents_WithPlotAreaMargin_AreaBaselineAndStrokeGeometry_AreVisible()
+    {
+        RunInSta(() =>
+        {
+            var dataSeries = new VariableDataSeries<double, double>(x => x);
+            dataSeries.Append(1, 4);
+            dataSeries.Append(2, 11);
+            dataSeries.Append(3, 7);
+            dataSeries.Append(4, 9);
+
+            var xAxis = new LinearAxis
+            {
+                Id = Chart.DefaultXAxisId,
+                Placement = AxisPlacement.Bottom
+            };
+            var yAxis = new LinearAxis
+            {
+                Id = Chart.DefaultYAxisId,
+                Placement = AxisPlacement.Left
+            };
+
+            var area = new AreaRenderableSeries
+            {
+                DataSeries = dataSeries,
+                BaselineY = -3,
+                StrokeThickness = 2,
+                XAxisId = Chart.DefaultXAxisId,
+                YAxisId = Chart.DefaultYAxisId
+            };
+
+            var chart = new Chart
+            {
+                Template = CreateChartTemplate(),
+                PlotAreaMargin = new Thickness(16, 12, 18, 10),
+                XAxes = [xAxis],
+                YAxes = [yAxis],
+                Series = [area]
+            };
+
+            RunInWindow(chart, new Size(320, 220), control =>
+            {
+                var surface = GetTemplatePart<FrameworkElement>(control, "PART_Surface");
+                control.ZoomExtents();
+
+                Assert.True(yAxis.CoreRange.Min <= area.BaselineY, $"Expected Y core range to include area baseline {area.BaselineY}, actual={yAxis.CoreRange}.");
+                AssertLineSeriesGeometryInsideViewport(surface, xAxis, yAxis, control.XRange, control.YRange, dataSeries, area.StrokeThickness);
+            });
+        });
+    }
+
+    [Fact]
+    public void Chart_ZoomExtents_WithPlotAreaMargin_BarBodyGeometry_IsFullyVisible()
+    {
+        RunInSta(() =>
+        {
+            var dataSeries = new VariableDataSeries<double, double>(x => x);
+            dataSeries.Append(1, 6);
+            dataSeries.Append(2, 11);
+            dataSeries.Append(3, 8);
+            dataSeries.Append(4, 4);
+
+            var xAxis = new LinearAxis
+            {
+                Id = Chart.DefaultXAxisId,
+                Placement = AxisPlacement.Bottom
+            };
+            var yAxis = new LinearAxis
+            {
+                Id = Chart.DefaultYAxisId,
+                Placement = AxisPlacement.Left
+            };
+
+            var bars = new BarRenderableSeries
+            {
+                DataSeries = dataSeries,
+                BarSpacing = 0.2,
+                XAxisId = Chart.DefaultXAxisId,
+                YAxisId = Chart.DefaultYAxisId
+            };
+
+            var chart = new Chart
+            {
+                Template = CreateChartTemplate(),
+                PlotAreaMargin = new Thickness(18, 10, 22, 12),
+                XAxes = [xAxis],
+                YAxes = [yAxis],
+                Series = [bars]
+            };
+
+            RunInWindow(chart, new Size(320, 220), control =>
+            {
+                var surface = GetTemplatePart<FrameworkElement>(control, "PART_Surface");
+                control.ZoomExtents();
+
+                double halfWidthAxis = ResolveBarHalfWidthAxisForTest(bars, xAxis, dataSeries.XRange, dataSeries);
+                var expectedBounds = GetExpandedAxisDataBoundsForTest(dataSeries, xAxis, halfWidthAxis);
+
+                Assert.Equal(expectedBounds.Min, xAxis.CoreRange.Min, 10);
+                Assert.Equal(expectedBounds.Max, xAxis.CoreRange.Max, 10);
+                Assert.Equal(xAxis.CoreRange.Min, xAxis.VisibleRange.Min, 10);
+                Assert.Equal(xAxis.CoreRange.Max, xAxis.VisibleRange.Max, 10);
+                Assert.True(yAxis.CoreRange.Min <= 0, $"Expected bar baseline to be included in Y core range, actual={yAxis.CoreRange}.");
+
+                AssertBarSeriesGeometryInsideViewport(surface, xAxis, yAxis, control.XRange, control.YRange, dataSeries, halfWidthAxis, baselineY: 0.0);
+            });
+        });
+    }
+
+    [Fact]
+    public void Chart_ZoomExtents_WithPlotAreaMargin_OhlcGeometry_IsFullyVisible()
+    {
+        RunInSta(() =>
+        {
+            var dataSeries = new OhlcDataSeries();
+            dataSeries.Append(1, 100, 106, 98, 104);
+            dataSeries.Append(2, 104, 110, 101, 108);
+            dataSeries.Append(4, 108, 112, 103, 105);
+            dataSeries.Append(8, 105, 116, 102, 114);
+
+            var xAxis = new LogAxis
+            {
+                Id = Chart.DefaultXAxisId,
+                Placement = AxisPlacement.Bottom
+            };
+            var yAxis = new LinearAxis
+            {
+                Id = Chart.DefaultYAxisId,
+                Placement = AxisPlacement.Left
+            };
+
+            var ohlc = new OhlcRenderableSeries
+            {
+                DataSeries = dataSeries,
+                StrokeThickness = 2,
+                XAxisId = Chart.DefaultXAxisId,
+                YAxisId = Chart.DefaultYAxisId
+            };
+
+            var chart = new Chart
+            {
+                Template = CreateChartTemplate(),
+                PlotAreaMargin = new Thickness(18, 10, 22, 12),
+                XAxes = [xAxis],
+                YAxes = [yAxis],
+                Series = [ohlc]
+            };
+
+            RunInWindow(chart, new Size(340, 240), control =>
+            {
+                var surface = GetTemplatePart<FrameworkElement>(control, "PART_Surface");
+                control.ZoomExtents();
+
+                double halfWidthAxis = ResolveOhlcHalfWidthAxisForTest(ohlc, xAxis, dataSeries.XRange, dataSeries);
+                var expectedBounds = GetExpandedAxisDataBoundsForTest(dataSeries, xAxis, halfWidthAxis);
+
+                Assert.Equal(expectedBounds.Min, xAxis.CoreRange.Min, 10);
+                Assert.Equal(expectedBounds.Max, xAxis.CoreRange.Max, 10);
+                Assert.True(xAxis.VisibleRange.Min < xAxis.CoreRange.Min);
+                Assert.True(xAxis.VisibleRange.Max > xAxis.CoreRange.Max);
+
+                AssertOhlcSeriesGeometryInsideViewport(surface, xAxis, yAxis, control.XRange, control.YRange, dataSeries, halfWidthAxis, ohlc.StrokeThickness);
+            });
         });
     }
 
@@ -844,7 +1473,7 @@ public class DataSeriesTests
     }
 
     [Fact]
-    public void LogAxis_CalculateAutoRange_ReturnsPowerOfTenRange()
+    public void LogAxis_CalculateAutoRange_ReturnsExactDataRange()
     {
         RunInSta(() =>
         {
@@ -856,8 +1485,59 @@ public class DataSeriesTests
 
             var autoRange = axis.CalculateAutoRange(new[] { dataSeries });
 
-            Assert.True(autoRange.Min <= 5);
-            Assert.True(autoRange.Max >= 500);
+            Assert.Equal(5, autoRange.Min);
+            Assert.Equal(500, autoRange.Max);
+        });
+    }
+
+    [Fact]
+    public void LogAxis_CalculateAutoRange_ReturnsExactMax()
+    {
+        RunInSta(() =>
+        {
+            var axis = new LogAxis { Placement = AxisPlacement.Left };
+            var dataSeries = new VariableDataSeries<double, double>(x => x);
+            dataSeries.Append(1, 30);
+            dataSeries.Append(2, 101);
+
+            var autoRange = axis.CalculateAutoRange(new[] { dataSeries });
+
+            Assert.True(autoRange.Min <= 30);
+            Assert.Equal(101, autoRange.Max);
+        });
+    }
+
+    [Fact]
+    public void LogAxis_CalculateAutoRange_MaxAtNiceValue_ReturnsExact()
+    {
+        RunInSta(() =>
+        {
+            var axis = new LogAxis { Placement = AxisPlacement.Left };
+            var dataSeries = new VariableDataSeries<double, double>(x => x);
+            dataSeries.Append(1, 10);
+            dataSeries.Append(2, 200);
+
+            var autoRange = axis.CalculateAutoRange(new[] { dataSeries });
+
+            Assert.Equal(200, autoRange.Max);
+        });
+    }
+
+    [Fact]
+    public void LogAxis_CalculateAutoRange_LargeRange_HandlesCorrectly()
+    {
+        RunInSta(() =>
+        {
+            var axis = new LogAxis { Placement = AxisPlacement.Left };
+            var dataSeries = new VariableDataSeries<double, double>(x => x);
+            dataSeries.Append(1, 0.3);
+            dataSeries.Append(2, 61512);
+
+            var autoRange = axis.CalculateAutoRange(new[] { dataSeries });
+
+            Assert.True(autoRange.Min <= 0.3);
+            Assert.True(autoRange.Max >= 61512);
+            Assert.True(autoRange.Max <= 100000);
         });
     }
 
@@ -1670,15 +2350,16 @@ public class DataSeriesTests
                         BorderBrush="{TemplateBinding PlotAreaBorderBrush}"
                         BorderThickness="{TemplateBinding PlotAreaBorderThickness}" />
                 <Grid>
-                    <axesControls:GridLinesControl x:Name="PART_GridLines"
-                                                XAxes="{Binding XAxes, RelativeSource={RelativeSource TemplatedParent}}"
-                                                YAxes="{Binding YAxes, RelativeSource={RelativeSource TemplatedParent}}" />
-                    <vortice:DrawingSurface x:Name="PART_Surface"
-                                            Stretch="Fill"
-                                            HorizontalAlignment="Stretch"
-                                            VerticalAlignment="Stretch" />
-                </Grid>
-            </Grid>
+                     <axesControls:GridLinesControl x:Name="PART_GridLines"
+                                                 XAxes="{Binding XAxes, RelativeSource={RelativeSource TemplatedParent}}"
+                                                 YAxes="{Binding YAxes, RelativeSource={RelativeSource TemplatedParent}}" />
+                     <vortice:DrawingSurface x:Name="PART_Surface"
+                                             Stretch="Fill"
+                                             Margin="{TemplateBinding PlotAreaMargin}"
+                                             HorizontalAlignment="Stretch"
+                                             VerticalAlignment="Stretch" />
+                 </Grid>
+             </Grid>
 
             <axesControls:AxisItemsControl x:Name="PART_RightAxesPresenter"
                                         Grid.Column="2"
@@ -1748,6 +2429,372 @@ public class DataSeriesTests
             window.Close();
         }
     }
+
+    private const double GeometryTolerance = 0.25;
+
+    private static void AssertLineSeriesGeometryInsideViewport(
+        FrameworkElement surface,
+        IAxis xAxis,
+        IAxis yAxis,
+        DataRange xRange,
+        DataRange yRange,
+        IDataSeries dataSeries,
+        double strokeThickness)
+    {
+        double padding = CalculateLineEndpointPaddingForTest(strokeThickness);
+
+        for (int i = 0; i < dataSeries.Count; i++)
+        {
+            AssertPointGeometryInsideViewport(
+                surface,
+                xAxis,
+                yAxis,
+                xRange,
+                yRange,
+                dataSeries.GetX(i),
+                dataSeries.GetY(i),
+                padding,
+                padding,
+                $"line point[{i}]");
+        }
+    }
+
+    private static void AssertScatterSeriesGeometryInsideViewport(
+        FrameworkElement surface,
+        IAxis xAxis,
+        IAxis yAxis,
+        DataRange xRange,
+        DataRange yRange,
+        IDataSeries dataSeries,
+        double markerSize)
+    {
+        double padding = ResolveRenderedMarkerSizeForTest(markerSize) * 0.5;
+
+        for (int i = 0; i < dataSeries.Count; i++)
+        {
+            AssertPointGeometryInsideViewport(
+                surface,
+                xAxis,
+                yAxis,
+                xRange,
+                yRange,
+                dataSeries.GetX(i),
+                dataSeries.GetY(i),
+                padding,
+                padding,
+                $"scatter point[{i}]");
+        }
+    }
+
+    private static void AssertBarSeriesGeometryInsideViewport(
+        FrameworkElement surface,
+        IAxis xAxis,
+        IAxis yAxis,
+        DataRange xRange,
+        DataRange yRange,
+        IDataSeries dataSeries,
+        double halfWidthAxis,
+        double baselineY)
+    {
+        for (int i = 0; i < dataSeries.Count; i++)
+        {
+            double x = dataSeries.GetX(i);
+            double y = dataSeries.GetY(i);
+            Assert.True(
+                TryGetExpandedAxisValueBounds(xAxis, x, halfWidthAxis, out double leftRaw, out double rightRaw),
+                $"Bar point[{i}] could not be transformed for viewport assertion.");
+
+            double left = DataToScreenX(xAxis, xRange, surface.ActualWidth, leftRaw);
+            double right = DataToScreenX(xAxis, xRange, surface.ActualWidth, rightRaw);
+            double top = DataToScreenY(yAxis, yRange, surface.ActualHeight, Math.Max(y, baselineY));
+            double bottom = DataToScreenY(yAxis, yRange, surface.ActualHeight, Math.Min(y, baselineY));
+
+            AssertPrimitiveBoundsInsideViewport(
+                surface,
+                left,
+                right,
+                top,
+                bottom,
+                $"bar[{i}]");
+        }
+    }
+
+    private static void AssertOhlcSeriesGeometryInsideViewport(
+        FrameworkElement surface,
+        IAxis xAxis,
+        IAxis yAxis,
+        DataRange xRange,
+        DataRange yRange,
+        IOhlcDataSeries dataSeries,
+        double halfWidthAxis,
+        double strokeThickness)
+    {
+        double wickXPadding = CalculateLineCrossAxisPaddingForTest(strokeThickness);
+        double wickYPadding = CalculateLineAlongAxisPaddingForTest();
+
+        for (int i = 0; i < dataSeries.Count; i++)
+        {
+            double x = dataSeries.GetX(i);
+            double open = dataSeries.GetOpen(i);
+            double high = dataSeries.GetHigh(i);
+            double low = dataSeries.GetLow(i);
+            double close = dataSeries.GetClose(i);
+
+            Assert.True(
+                TryGetExpandedAxisValueBounds(xAxis, x, halfWidthAxis, out double leftRaw, out double rightRaw),
+                $"OHLC point[{i}] could not be transformed for viewport assertion.");
+
+            double bodyLeft = DataToScreenX(xAxis, xRange, surface.ActualWidth, leftRaw);
+            double bodyRight = DataToScreenX(xAxis, xRange, surface.ActualWidth, rightRaw);
+            double bodyTop = DataToScreenY(yAxis, yRange, surface.ActualHeight, Math.Max(open, close));
+            double bodyBottom = DataToScreenY(yAxis, yRange, surface.ActualHeight, Math.Min(open, close));
+            AssertPrimitiveBoundsInsideViewport(surface, bodyLeft, bodyRight, bodyTop, bodyBottom, $"ohlc body[{i}]");
+
+            double centerX = DataToScreenX(xAxis, xRange, surface.ActualWidth, x);
+            double wickTop = DataToScreenY(yAxis, yRange, surface.ActualHeight, high);
+            double wickBottom = DataToScreenY(yAxis, yRange, surface.ActualHeight, low);
+
+            AssertPrimitiveBoundsInsideViewport(
+                surface,
+                centerX - wickXPadding,
+                centerX + wickXPadding,
+                wickTop - wickYPadding,
+                wickBottom + wickYPadding,
+                $"ohlc wick[{i}]");
+        }
+    }
+
+    private static void AssertPointGeometryInsideViewport(
+        FrameworkElement surface,
+        IAxis xAxis,
+        IAxis yAxis,
+        DataRange xRange,
+        DataRange yRange,
+        double x,
+        double y,
+        double xPadding,
+        double yPadding,
+        string label)
+    {
+        double screenX = DataToScreenX(xAxis, xRange, surface.ActualWidth, x);
+        double screenY = DataToScreenY(yAxis, yRange, surface.ActualHeight, y);
+
+        AssertPrimitiveBoundsInsideViewport(
+            surface,
+            screenX - xPadding,
+            screenX + xPadding,
+            screenY - yPadding,
+            screenY + yPadding,
+            label);
+    }
+
+    private static void AssertPrimitiveBoundsInsideViewport(
+        FrameworkElement surface,
+        double left,
+        double right,
+        double top,
+        double bottom,
+        string label)
+    {
+        double minX = Math.Min(left, right);
+        double maxX = Math.Max(left, right);
+        double minY = Math.Min(top, bottom);
+        double maxY = Math.Max(top, bottom);
+
+        Assert.True(
+            minX >= -GeometryTolerance,
+            $"{label} left edge clipped: left={minX}, tolerance={GeometryTolerance}, viewportWidth={surface.ActualWidth}");
+        Assert.True(
+            maxX <= surface.ActualWidth + GeometryTolerance,
+            $"{label} right edge clipped: right={maxX}, tolerance={GeometryTolerance}, viewportWidth={surface.ActualWidth}");
+        Assert.True(
+            minY >= -GeometryTolerance,
+            $"{label} top edge clipped: top={minY}, tolerance={GeometryTolerance}, viewportHeight={surface.ActualHeight}");
+        Assert.True(
+            maxY <= surface.ActualHeight + GeometryTolerance,
+            $"{label} bottom edge clipped: bottom={maxY}, tolerance={GeometryTolerance}, viewportHeight={surface.ActualHeight}");
+    }
+
+    private static double ResolveBarHalfWidthAxisForTest(
+        BarRenderableSeries series,
+        IAxis xAxis,
+        DataRange fallbackRange,
+        IDataSeries dataSeries)
+    {
+        Assert.True(
+            TryGetTransformedSeriesAxisStatsForTest(dataSeries, xAxis.CoordinateMapper, isXAxis: true, out double minValue, out double maxValue, out int count),
+            "Bar series must expose at least one valid X value.");
+
+        double fallbackRangeLength = TransformRangeForTest(fallbackRange, xAxis.CoordinateMapper).Length;
+        double dataSpacing = count > 1
+            ? Math.Abs(maxValue - minValue) / (count - 1)
+            : (Math.Abs(fallbackRangeLength) > double.Epsilon ? Math.Abs(fallbackRangeLength) : 1.0) / 10.0;
+
+        double width = series.BarWidth > 0
+            ? series.BarWidth
+            : dataSpacing * (1.0 - series.BarSpacing);
+        if (width <= 0)
+            width = dataSpacing * 0.8;
+
+        return width * 0.5;
+    }
+
+    private static double ResolveOhlcHalfWidthAxisForTest(
+        OhlcRenderableSeries series,
+        IAxis xAxis,
+        DataRange fallbackRange,
+        IDataSeries dataSeries)
+    {
+        Assert.True(
+            TryGetTransformedSeriesAxisStatsForTest(dataSeries, xAxis.CoordinateMapper, isXAxis: true, out double minValue, out double maxValue, out int count),
+            "OHLC series must expose at least one valid X value.");
+
+        double fallbackRangeLength = TransformRangeForTest(fallbackRange, xAxis.CoordinateMapper).Length;
+        double dataSpacing = count > 1
+            ? Math.Abs(maxValue - minValue) / (count - 1)
+            : (Math.Abs(fallbackRangeLength) > double.Epsilon ? Math.Abs(fallbackRangeLength) : 1.0) / 10.0;
+
+        double width = series.BarWidth > 0
+            ? series.BarWidth
+            : dataSpacing * 0.6;
+        if (width <= 0)
+            width = dataSpacing * 0.6;
+
+        return width * 0.5;
+    }
+
+    private static DataRange GetExpandedAxisDataBoundsForTest(
+        IDataSeries dataSeries,
+        IAxis axis,
+        double halfWidthAxis)
+    {
+        Assert.True(
+            TryGetTransformedSeriesAxisStatsForTest(dataSeries, axis.CoordinateMapper, isXAxis: true, out double minValue, out double maxValue, out _),
+            "Series must expose at least one valid X value.");
+
+        double expandedMin = InverseTransformAxisValueForTest(minValue - halfWidthAxis, axis.CoordinateMapper);
+        double expandedMax = InverseTransformAxisValueForTest(maxValue + halfWidthAxis, axis.CoordinateMapper);
+        if (axis.CoordinateMapper is LogCoordinateMapper)
+            expandedMin = Math.Max(double.Epsilon, expandedMin);
+
+        return new DataRange(expandedMin, expandedMax);
+    }
+
+    private static bool TryGetExpandedAxisValueBounds(
+        IAxis axis,
+        double value,
+        double halfWidthAxis,
+        out double leftRaw,
+        out double rightRaw)
+    {
+        leftRaw = 0;
+        rightRaw = 0;
+
+        if (!TryTransformAxisValueForTest(value, axis.CoordinateMapper, out double transformedValue))
+            return false;
+
+        leftRaw = InverseTransformAxisValueForTest(transformedValue - halfWidthAxis, axis.CoordinateMapper);
+        rightRaw = InverseTransformAxisValueForTest(transformedValue + halfWidthAxis, axis.CoordinateMapper);
+        if (axis.CoordinateMapper is LogCoordinateMapper)
+            leftRaw = Math.Max(double.Epsilon, leftRaw);
+
+        return !double.IsNaN(leftRaw) && !double.IsInfinity(leftRaw)
+            && !double.IsNaN(rightRaw) && !double.IsInfinity(rightRaw);
+    }
+
+    private static bool TryGetTransformedSeriesAxisStatsForTest(
+        IDataSeries dataSeries,
+        ICoordinateMapper mapper,
+        bool isXAxis,
+        out double minValue,
+        out double maxValue,
+        out int count)
+    {
+        minValue = double.PositiveInfinity;
+        maxValue = double.NegativeInfinity;
+        count = 0;
+
+        for (int i = 0; i < dataSeries.Count; i++)
+        {
+            double value = isXAxis ? dataSeries.GetX(i) : dataSeries.GetY(i);
+            if (!TryTransformAxisValueForTest(value, mapper, out double transformedValue))
+                continue;
+
+            minValue = Math.Min(minValue, transformedValue);
+            maxValue = Math.Max(maxValue, transformedValue);
+            count++;
+        }
+
+        return count > 0
+            && !double.IsPositiveInfinity(minValue)
+            && !double.IsNegativeInfinity(maxValue);
+    }
+
+    private static bool TryTransformAxisValueForTest(double value, ICoordinateMapper mapper, out double transformedValue)
+    {
+        if (mapper is LogCoordinateMapper logMapper)
+        {
+            if (value <= 0 || double.IsNaN(value) || double.IsInfinity(value))
+            {
+                transformedValue = 0;
+                return false;
+            }
+
+            transformedValue = Math.Log(value) / Math.Log(logMapper.LogBase);
+            return !double.IsNaN(transformedValue) && !double.IsInfinity(transformedValue);
+        }
+
+        transformedValue = value;
+        return !double.IsNaN(transformedValue) && !double.IsInfinity(transformedValue);
+    }
+
+    private static double InverseTransformAxisValueForTest(double transformedValue, ICoordinateMapper mapper)
+    {
+        if (mapper is LogCoordinateMapper logMapper)
+            return Math.Pow(logMapper.LogBase, transformedValue);
+
+        return transformedValue;
+    }
+
+    private static DataRange TransformRangeForTest(DataRange range, ICoordinateMapper mapper)
+    {
+        if (mapper is not LogCoordinateMapper logMapper
+            || range.Min <= 0
+            || range.Max <= 0)
+        {
+            return range;
+        }
+
+        return new DataRange(
+            Math.Log(range.Min) / Math.Log(logMapper.LogBase),
+            Math.Log(range.Max) / Math.Log(logMapper.LogBase));
+    }
+
+    private static double DataToScreenX(IAxis axis, DataRange range, double viewportWidth, double x)
+        => axis.CoordinateMapper.DataToScreen(x, range, viewportWidth);
+
+    private static double DataToScreenY(IAxis axis, DataRange range, double viewportHeight, double y)
+        => viewportHeight - axis.CoordinateMapper.DataToScreen(y, range, viewportHeight);
+
+    private static double ResolveRenderedStrokeThicknessForTest(double strokeThickness)
+        => Math.Max(1.0, strokeThickness);
+
+    private static double ResolveRenderedMarkerSizeForTest(double markerSize)
+        => Math.Max(1.0, markerSize);
+
+    private static double CalculateLineEndpointPaddingForTest(double strokeThickness)
+    {
+        double feather = 1.0;
+        double halfThickness = ResolveRenderedStrokeThicknessForTest(strokeThickness) * 0.5;
+        double expandedHalfThickness = halfThickness + feather;
+        return Math.Sqrt(feather * feather + expandedHalfThickness * expandedHalfThickness);
+    }
+
+    private static double CalculateLineCrossAxisPaddingForTest(double strokeThickness)
+        => ResolveRenderedStrokeThicknessForTest(strokeThickness) * 0.5 + 1.0;
+
+    private static double CalculateLineAlongAxisPaddingForTest()
+        => 1.0;
 
     private static bool InvokeIsPointInPlotArea(Chart chart, Point point)
     {

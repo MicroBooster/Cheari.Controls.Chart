@@ -33,7 +33,7 @@ public class OhlcRenderableSeries : RenderableSeriesBase
     public Color DownStroke { get; set; } = Color.FromRgb(255, 61, 61);
 
     /// <summary>
-    /// 获取或设置K线宽度（像素）。如果为0，则根据数据密度自动计算。
+    /// 获取或设置K线实体宽度（轴数据单位；对数轴下为变换后的轴空间宽度）。如果为0，则根据数据密度自动计算。
     /// </summary>
     public double BarWidth { get; set; }
 }

@@ -36,6 +36,11 @@ internal sealed class AxisRenderGroup
     public IReadOnlyList<IRenderCommand> Commands { get; init; } = Array.Empty<IRenderCommand>();
 
     /// <summary>
+    /// 获取X轴引用，用于GPU渲染时实时验证XRange一致性。
+    /// </summary>
+    public IAxis? XAxis { get; init; }
+
+    /// <summary>
     /// 获取Y轴引用，用于GPU渲染时实时验证YRange一致性。
     /// </summary>
     public IAxis? YAxis { get; init; }

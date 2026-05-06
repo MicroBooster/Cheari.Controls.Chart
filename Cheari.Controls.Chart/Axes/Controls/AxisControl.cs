@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -120,7 +121,8 @@ public class AxisControl : Control
             || e.Property == FontStretchProperty
             || e.Property == FontStyleProperty
             || e.Property == FontWeightProperty
-            || e.Property == ForegroundProperty)
+            || e.Property == ForegroundProperty
+            || e.Property == Chart.PlotAreaMarginProperty)
         {
             InvalidateMeasure();
             UpdateAxisVisuals();
@@ -485,20 +487,18 @@ public class AxisControl : Control
         _axisLine.Y2 = height;
 
         double pixelsPerDip = GetPixelsPerDip();
-        var ticks = axis.GetMajorTicks(NormalizeViewportSize(mappingHeight));
+        var margin = Chart.GetPlotAreaMargin(this);
+        double paddedHeight = Math.Max(1, mappingHeight - margin.Top - margin.Bottom);
+        var ticks = axis.GetMajorTicks(NormalizeViewportSize(paddedHeight));
         int lineIndex = 0;
         int labelIndex = 0;
 
         foreach (var tick in ticks)
         {
-            // 坐标映射：将数据值转换为屏幕坐标
-            // DataToScreen 返回 0 到 mappingHeight 之间的位置（0=最小值，mappingHeight=最大值）
-            double position = axis.CoordinateMapper.DataToScreen(tick.Position, axis.VisibleRange, mappingHeight);
+            double position = axis.CoordinateMapper.DataToScreen(tick.Position, axis.VisibleRange, paddedHeight);
 
-            // 翻转Y坐标：WPF坐标系原点在左上角，而图表坐标原点在左下角
-            position = mappingHeight - position;
+            position = margin.Top + (paddedHeight - position);
 
-            // 确保刻度线位置在有效范围内
             position = Math.Clamp(position, 0, mappingHeight);
 
             if (double.IsNaN(position) || double.IsInfinity(position))
@@ -568,13 +568,18 @@ public class AxisControl : Control
         _axisLine.Y2 = axisY;
 
         double pixelsPerDip = GetPixelsPerDip();
-        var ticks = axis.GetMajorTicks(NormalizeViewportSize(mappingWidth));
+        var margin = Chart.GetPlotAreaMargin(this);
+        double paddedWidth = Math.Max(1, mappingWidth - margin.Left - margin.Right);
+        var ticks = axis.GetMajorTicks(NormalizeViewportSize(paddedWidth));
+
         int lineIndex = 0;
         int labelIndex = 0;
 
         foreach (var tick in ticks)
         {
-            double position = axis.CoordinateMapper.DataToScreen(tick.Position, axis.VisibleRange, mappingWidth);
+            double position = axis.CoordinateMapper.DataToScreen(tick.Position, axis.VisibleRange, paddedWidth);
+
+            position = margin.Left + position;
             position = Math.Clamp(position, 0, mappingWidth);
 
             if (double.IsNaN(position) || double.IsInfinity(position))

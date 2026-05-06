@@ -689,19 +689,8 @@ float4 main(PSInput input) : SV_Target
             for (int g = 0; g < renderGroups.Count; g++)
             {
                 var group = renderGroups[g];
-                var yRange = group.YRange;
-                var xRange = group.XRange;
-
-                if (group.YAxis != null)
-                {
-                    var currentYRange = group.YAxis.VisibleRange;
-
-                    if (Math.Abs(currentYRange.Min - yRange.Min) > 1e-10
-                        || Math.Abs(currentYRange.Max - yRange.Max) > 1e-10)
-                    {
-                        yRange = currentYRange;
-                    }
-                }
+                var xRange = ResolveAxisRenderRange(group.XRange, group.XAxis, group.XMapper);
+                var yRange = ResolveAxisRenderRange(group.YRange, group.YAxis, group.YMapper);
 
                 UpdateConstants(width, height, enableAntialiasing, xRange, yRange);
 
@@ -744,6 +733,32 @@ float4 main(PSInput input) : SV_Target
             DisposeTargetResources();
             return false;
         }
+    }
+
+    private static DataRange ResolveAxisRenderRange(DataRange renderRange, IAxis? axis, ICoordinateMapper mapper)
+    {
+        if (axis == null)
+            return renderRange;
+
+        var currentRange = axis.VisibleRange;
+
+        if (mapper is LogCoordinateMapper logMapper
+            && currentRange.Min > 0
+            && currentRange.Max > 0)
+        {
+            double invLogBase = 1.0 / Math.Log(logMapper.LogBase);
+            currentRange = new DataRange(
+                Math.Log(currentRange.Min) * invLogBase,
+                Math.Log(currentRange.Max) * invLogBase);
+        }
+
+        if (Math.Abs(currentRange.Min - renderRange.Min) > 1e-10
+            || Math.Abs(currentRange.Max - renderRange.Max) > 1e-10)
+        {
+            return currentRange;
+        }
+
+        return renderRange;
     }
 
     #region Pipeline Initialization

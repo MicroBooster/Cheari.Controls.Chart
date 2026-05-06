@@ -95,16 +95,13 @@ internal sealed class BarSeriesRenderer
 
         int visibleCount = visibleEnd - visibleStart + 1;
 
-        double xRangeLength = Math.Abs(context.XRange.Length) > double.Epsilon ? context.XRange.Length : 1.0;
-        double dataSpacing = visibleCount > 1
-            ? (frame.XValues[visibleEnd] - frame.XValues[visibleStart]) / (visibleCount - 1)
-            : xRangeLength / 10.0;
-
-        double barWidthData = series.BarWidth > 0
-            ? series.BarWidth
-            : dataSpacing * (1.0 - series.BarSpacing);
-        if (barWidthData <= 0)
-            barWidthData = dataSpacing * 0.8;
+        double xAxisSpan = frame.XValues[visibleEnd] - frame.XValues[visibleStart];
+        double fallbackRangeLength = Math.Abs(context.XRange.Length) > double.Epsilon ? context.XRange.Length : 1.0;
+        double barWidthData = SeriesGeometryHelper.ResolveBarWidthData(
+            series,
+            xAxisSpan,
+            visibleCount,
+            fallbackRangeLength);
 
         double baselineY = Math.Max(context.YRange.Min, Math.Min(context.YRange.Max, 0.0));
 
@@ -189,16 +186,13 @@ internal sealed class BarSeriesRenderer
         float b = series.Fill.ScB;
         float a = series.Fill.ScA;
 
-        double xRangeLength = Math.Abs(context.XRange.Length) > double.Epsilon ? context.XRange.Length : 1.0;
-        double dataSpacing = newVisibleCount > 1
-            ? (frame.XValues![visibleEnd] - frame.XValues![visibleStart]) / (newVisibleCount - 1)
-            : xRangeLength / 10.0;
-
-        double barWidthData = series.BarWidth > 0
-            ? series.BarWidth
-            : dataSpacing * (1.0 - series.BarSpacing);
-        if (barWidthData <= 0)
-            barWidthData = dataSpacing * 0.8;
+        double xAxisSpan = frame.XValues![visibleEnd] - frame.XValues![visibleStart];
+        double fallbackRangeLength = Math.Abs(context.XRange.Length) > double.Epsilon ? context.XRange.Length : 1.0;
+        double barWidthData = SeriesGeometryHelper.ResolveBarWidthData(
+            series,
+            xAxisSpan,
+            newVisibleCount,
+            fallbackRangeLength);
 
         double baselineY = Math.Max(context.YRange.Min, Math.Min(context.YRange.Max, 0.0));
 

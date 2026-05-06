@@ -1,3 +1,4 @@
+using System.Buffers;
 using Cheari.Controls.Axes;
 using Cheari.Controls.Axes.CoordinateMappers;
 using Cheari.Controls.Core;
@@ -43,6 +44,8 @@ internal sealed class SeriesRendererDispatcher
     private readonly List<AxisRenderGroup> _renderGroups = new(4);
     private readonly List<IRenderCommand> _commands = new(8);
     private readonly ChartRenderContext _scopedContext = new();
+
+    private readonly Dictionary<IRenderableSeries, (int Version, DataFrame Frame)> _logFrameCache = new();
 
     public IReadOnlyList<IRenderCommand> Render(ChartRenderContext context, int width, int height)
     {
@@ -180,14 +183,25 @@ internal sealed class SeriesRendererDispatcher
         var xMapper = xAxis.CoordinateMapper;
         var yMapper = yAxis.CoordinateMapper;
 
+        // 对数轴：范围变换到 log 空间，与 GPU 着色器线性计算配合
+        var gpuXRange = TransformRangeForGpu(xRange, xMapper);
+        var gpuYRange = TransformRangeForGpu(yRange, yMapper);
+
+        // 对数轴：包装 frameAccessor，返回 log 变换后的帧数据
+        var needsXTransform = xMapper is LogCoordinateMapper;
+        var needsYTransform = yMapper is LogCoordinateMapper;
+        var wrappedAccessor = needsXTransform || needsYTransform
+            ? CreateLogFrameAccessor(frameAccessor, xMapper, yMapper, source)
+            : frameAccessor;
+
         ResetScopedContext(
             source,
             groupedSeries,
-            xRange,
-            yRange,
+            gpuXRange,
+            gpuYRange,
             xMapper,
             yMapper,
-            frameAccessor);
+            wrappedAccessor);
 
         _commands.Clear();
         for (int i = 0; i < groupedSeries.Count; i++)
@@ -195,13 +209,239 @@ internal sealed class SeriesRendererDispatcher
 
         return new AxisRenderGroup
         {
-            XRange = xRange,
-            YRange = yRange,
+            XRange = gpuXRange,
+            YRange = gpuYRange,
             XMapper = xMapper,
             YMapper = yMapper,
             Commands = new List<IRenderCommand>(_commands),
+            XAxis = xAxis,
             YAxis = yAxis
         };
+    }
+
+    private static DataRange TransformRangeForGpu(DataRange range, ICoordinateMapper mapper)
+    {
+        if (mapper is not LogCoordinateMapper logMapper)
+            return range;
+
+        if (range.Min <= 0 || range.Max <= 0)
+            return range;
+
+        double invLogBase = 1.0 / Math.Log(logMapper.LogBase);
+        double logMin = Math.Log(range.Min) * invLogBase;
+        double logMax = Math.Log(range.Max) * invLogBase;
+        return new DataRange(logMin, logMax);
+    }
+
+    private Func<IRenderableSeries, DataFrame?>? CreateLogFrameAccessor(
+        Func<IRenderableSeries, DataFrame?>? originalAccessor,
+        ICoordinateMapper xMapper,
+        ICoordinateMapper yMapper,
+        ChartRenderContext source)
+    {
+        var xLogMapper = xMapper as LogCoordinateMapper;
+        var yLogMapper = yMapper as LogCoordinateMapper;
+        double xInvLogBase = xLogMapper?.InvLogBase ?? 0.0;
+        double yInvLogBase = yLogMapper?.InvLogBase ?? 0.0;
+
+        return series =>
+        {
+            if (_logFrameCache.TryGetValue(series, out var cached)
+                && cached.Version == (series.DataSeries?.Version ?? 0))
+                return cached.Frame;
+
+            var rawFrame = originalAccessor?.Invoke(series);
+
+            if (rawFrame == null)
+                rawFrame = CreateFrameDirectlyFromSeries(series);
+            if (rawFrame == null || rawFrame.Count == 0)
+                return null;
+
+            if (_logFrameCache.TryGetValue(series, out cached) && cached.Version == rawFrame.Version)
+            {
+                rawFrame.Return();
+                return cached.Frame;
+            }
+
+            if (cached.Frame != null)
+                cached.Frame.Return();
+
+            var transformed = TransformFrameForGpu(rawFrame, xLogMapper != null, yLogMapper != null,
+                xInvLogBase, yInvLogBase);
+
+            rawFrame.Return();
+
+            _logFrameCache[series] = (rawFrame.Version, transformed);
+            return transformed;
+        };
+    }
+
+    private static DataFrame? CreateFrameDirectlyFromSeries(IRenderableSeries series)
+    {
+        var ds = series.DataSeries;
+        if (ds == null || ds.Count == 0)
+            return null;
+
+        var count = ds.Count;
+        var xArr = ArrayPool<float>.Shared.Rent(count);
+        var yArr = ArrayPool<float>.Shared.Rent(count);
+
+        var xBuf = ArrayPool<double>.Shared.Rent(count);
+        var yBuf = ArrayPool<double>.Shared.Rent(count);
+        ds.CopyXValues(new Span<double>(xBuf, 0, count));
+        ds.CopyYValues(new Span<double>(yBuf, 0, count));
+
+        for (int i = 0; i < count; i++)
+        {
+            xArr[i] = (float)xBuf[i];
+            yArr[i] = (float)yBuf[i];
+        }
+
+        ArrayPool<double>.Shared.Return(xBuf);
+        ArrayPool<double>.Shared.Return(yBuf);
+
+        return new DataFrame
+        {
+            Count = count,
+            Version = ds.Version,
+            XRange = ds.XRange,
+            YRange = ds.YRange,
+            Type = DataFrameType.Xy,
+            XValues = xArr,
+            YValues = yArr,
+            RentedXLength = count,
+            RentedYLength = count
+        };
+    }
+
+    private static DataFrame TransformFrameForGpu(
+        DataFrame source, bool transformX, bool transformY,
+        double xInvLogBase, double yInvLogBase)
+    {
+        var count = source.Count;
+        float[]? newX = null, newY = null;
+        float[]? newOpen = null, newHigh = null, newLow = null, newClose = null;
+
+        if (source.XValues != null)
+        {
+            newX = ArrayPool<float>.Shared.Rent(count);
+            if (transformX)
+            {
+                for (int i = 0; i < count; i++)
+                {
+                    float val = source.XValues[i];
+                    newX[i] = val > 0 ? (float)(Math.Log(val) * xInvLogBase) : 0f;
+                }
+            }
+            else
+            {
+                Array.Copy(source.XValues, newX, count);
+            }
+        }
+
+        if (source.YValues != null)
+        {
+            newY = ArrayPool<float>.Shared.Rent(count);
+            if (transformY)
+            {
+                for (int i = 0; i < count; i++)
+                {
+                    float val = source.YValues[i];
+                    newY[i] = val > 0 ? (float)(Math.Log(val) * yInvLogBase) : 0f;
+                }
+            }
+            else
+            {
+                Array.Copy(source.YValues, newY, count);
+            }
+        }
+
+        if (source.OpenValues != null)
+        {
+            newOpen = ArrayPool<float>.Shared.Rent(count);
+            if (transformY)
+            {
+                for (int i = 0; i < count; i++)
+                {
+                    float val = source.OpenValues[i];
+                    newOpen[i] = val > 0 ? (float)(Math.Log(val) * yInvLogBase) : 0f;
+                }
+            }
+            else
+            {
+                Array.Copy(source.OpenValues, newOpen, count);
+            }
+        }
+        if (source.HighValues != null)
+        {
+            newHigh = ArrayPool<float>.Shared.Rent(count);
+            if (transformY)
+            {
+                for (int i = 0; i < count; i++)
+                {
+                    float val = source.HighValues[i];
+                    newHigh[i] = val > 0 ? (float)(Math.Log(val) * yInvLogBase) : 0f;
+                }
+            }
+            else
+            {
+                Array.Copy(source.HighValues, newHigh, count);
+            }
+        }
+        if (source.LowValues != null)
+        {
+            newLow = ArrayPool<float>.Shared.Rent(count);
+            if (transformY)
+            {
+                for (int i = 0; i < count; i++)
+                {
+                    float val = source.LowValues[i];
+                    newLow[i] = val > 0 ? (float)(Math.Log(val) * yInvLogBase) : 0f;
+                }
+            }
+            else
+            {
+                Array.Copy(source.LowValues, newLow, count);
+            }
+        }
+        if (source.CloseValues != null)
+        {
+            newClose = ArrayPool<float>.Shared.Rent(count);
+            if (transformY)
+            {
+                for (int i = 0; i < count; i++)
+                {
+                    float val = source.CloseValues[i];
+                    newClose[i] = val > 0 ? (float)(Math.Log(val) * yInvLogBase) : 0f;
+                }
+            }
+            else
+            {
+                Array.Copy(source.CloseValues, newClose, count);
+            }
+        }
+
+        return new DataFrame
+        {
+            Count = count,
+            Version = source.Version,
+            XRange = transformX ? LogTransformRange(source.XRange, xInvLogBase) : source.XRange,
+            YRange = transformY ? LogTransformRange(source.YRange, yInvLogBase) : source.YRange,
+            Type = source.Type,
+            XValues = newX, YValues = newY,
+            OpenValues = newOpen, HighValues = newHigh,
+            LowValues = newLow, CloseValues = newClose,
+            RentedXLength = newX != null ? count : 0,
+            RentedYLength = newY != null ? count : 0,
+            RentedOhlcLength = newOpen != null ? count : 0
+        };
+    }
+
+    private static DataRange LogTransformRange(DataRange range, double invLogBase)
+    {
+        if (range.Min <= 0 || range.Max <= 0)
+            return range;
+        return new DataRange(Math.Log(range.Min) * invLogBase, Math.Log(range.Max) * invLogBase);
     }
 
     private void ResetScopedContext(

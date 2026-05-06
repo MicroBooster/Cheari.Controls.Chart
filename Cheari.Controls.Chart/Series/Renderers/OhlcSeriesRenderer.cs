@@ -80,16 +80,16 @@ internal sealed class OhlcSeriesRenderer
 
         int visibleCount = visibleEnd - visibleStart + 1;
 
-        double xRangeLength = Math.Abs(context.XRange.Length) > double.Epsilon ? context.XRange.Length : 1.0;
+        double xAxisSpan = frame.XValues[visibleEnd] - frame.XValues[visibleStart];
+        double fallbackRangeLength = Math.Abs(context.XRange.Length) > double.Epsilon ? context.XRange.Length : 1.0;
         double dataSpacing = visibleCount > 1
-            ? (frame.XValues[visibleEnd] - frame.XValues[visibleStart]) / (visibleCount - 1)
-            : xRangeLength / 10.0;
-
-        double barWidthData = series.BarWidth > 0
-            ? series.BarWidth
-            : dataSpacing * 0.6;
-        if (barWidthData <= 0)
-            barWidthData = dataSpacing * 0.6;
+            ? Math.Abs(xAxisSpan) / (visibleCount - 1)
+            : fallbackRangeLength / 10.0;
+        double barWidthData = SeriesGeometryHelper.ResolveOhlcBodyWidthData(
+            series,
+            xAxisSpan,
+            visibleCount,
+            fallbackRangeLength);
 
         float wickThickness = Math.Max(1.0f, (float)series.StrokeThickness);
 
@@ -209,16 +209,16 @@ internal sealed class OhlcSeriesRenderer
         if (series.BarWidth <= 0 && oldVisibleCount != newVisibleCount)
             return;
 
-        double xRangeLength = Math.Abs(context.XRange.Length) > double.Epsilon ? context.XRange.Length : 1.0;
+        double xAxisSpan = frame.XValues![visibleEnd] - frame.XValues![visibleStart];
+        double fallbackRangeLength = Math.Abs(context.XRange.Length) > double.Epsilon ? context.XRange.Length : 1.0;
         double dataSpacing = newVisibleCount > 1
-            ? (frame.XValues![visibleEnd] - frame.XValues![visibleStart]) / (newVisibleCount - 1)
-            : xRangeLength / 10.0;
-
-        double barWidthData = series.BarWidth > 0
-            ? series.BarWidth
-            : dataSpacing * 0.6;
-        if (barWidthData <= 0)
-            barWidthData = dataSpacing * 0.6;
+            ? Math.Abs(xAxisSpan) / (newVisibleCount - 1)
+            : fallbackRangeLength / 10.0;
+        double barWidthData = SeriesGeometryHelper.ResolveOhlcBodyWidthData(
+            series,
+            xAxisSpan,
+            newVisibleCount,
+            fallbackRangeLength);
 
         float wickThickness = Math.Max(1.0f, (float)series.StrokeThickness);
 

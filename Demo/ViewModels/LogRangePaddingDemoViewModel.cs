@@ -9,40 +9,45 @@ using Cheari.Controls.Series.Types;
 
 namespace Demo.ViewModels;
 
-public enum DemoChartType
+public enum LogDemoChartType
 {
     Line,
     Scatter,
     Bar,
-    Area,
-    Ohlc
+    Area
 }
 
-public class RangePaddingDemoViewModel : ChartDemoViewModelBase
+public class LogRangePaddingDemoViewModel : ChartDemoViewModelBase
 {
     private Thickness _PlotAreaMargin;
     private bool _xAutoRange = true;
     private bool _yAutoRange = true;
-    private DemoChartType _selectedChartType = DemoChartType.Line;
+    private LogDemoChartType _selectedChartType = LogDemoChartType.Line;
     private double _xLimitMin;
     private double _xLimitMax;
     private double _yLimitMin;
     private double _yLimitMax;
     private VisibleRangeLimitMode _xLimitMode;
     private VisibleRangeLimitMode _yLimitMode;
+    private double _logBase = 10.0;
 
-    public string Title { get; } = "坐标轴留白演示";
+    public LogAxis? XAxis { get; private set; }
+    public LogAxis? YAxis { get; private set; }
 
-    public LinearAxis? XAxis { get; private set; }
-    public LinearAxis? YAxis { get; private set; }
-
-    public List<DemoChartTypeOption> ChartTypeOptions { get; } =
+    public List<LogChartTypeOption> ChartTypeOptions { get; } =
     [
-        new("折线图", DemoChartType.Line),
-        new("散点图", DemoChartType.Scatter),
-        new("柱状图", DemoChartType.Bar),
-        new("面积图", DemoChartType.Area),
-        new("蜡烛图", DemoChartType.Ohlc),
+        new("折线图", LogDemoChartType.Line),
+        new("散点图", LogDemoChartType.Scatter),
+        new("柱状图", LogDemoChartType.Bar),
+        new("面积图", LogDemoChartType.Area),
+    ];
+
+    public List<LimitModeOption> LimitModeOptions { get; } =
+    [
+        new("不限制", VisibleRangeLimitMode.None),
+        new("最小值", VisibleRangeLimitMode.MinOnly),
+        new("最大值", VisibleRangeLimitMode.MaxOnly),
+        new("全部", VisibleRangeLimitMode.MinAndMax),
     ];
 
     public Thickness PlotAreaMargin
@@ -111,7 +116,7 @@ public class RangePaddingDemoViewModel : ChartDemoViewModelBase
         }
     }
 
-    public DemoChartType SelectedChartType
+    public LogDemoChartType SelectedChartType
     {
         get => _selectedChartType;
         set
@@ -140,14 +145,6 @@ public class RangePaddingDemoViewModel : ChartDemoViewModelBase
                 YAxis.AutoRange = value;
         }
     }
-
-    public List<LimitModeOption> LimitModeOptions { get; } =
-    [
-        new("不限制", VisibleRangeLimitMode.None),
-        new("最小值", VisibleRangeLimitMode.MinOnly),
-        new("最大值", VisibleRangeLimitMode.MaxOnly),
-        new("全部", VisibleRangeLimitMode.MinAndMax),
-    ];
 
     public double XLimitMin
     {
@@ -209,10 +206,23 @@ public class RangePaddingDemoViewModel : ChartDemoViewModelBase
         }
     }
 
-    public RangePaddingDemoViewModel()
+    public double LogBase
     {
-        InitialXRange = new DataRange(0, 100);
-        InitialYRange = new DataRange(-6, 6);
+        get => _logBase;
+        set
+        {
+            if (SetProperty(ref _logBase, value))
+            {
+                if (YAxis != null) YAxis.Base = value;
+                if (XAxis != null) XAxis.Base = value;
+            }
+        }
+    }
+
+    public LogRangePaddingDemoViewModel()
+    {
+        InitialXRange = new DataRange(1, 50);
+        InitialYRange = new DataRange(1, 10000);
     }
 
     protected override void InitializeChart()
@@ -226,7 +236,7 @@ public class RangePaddingDemoViewModel : ChartDemoViewModelBase
         XAxes.Clear();
         YAxes.Clear();
 
-        XAxis = new LinearAxis
+        XAxis = new LogAxis
         {
             Id = Chart.DefaultXAxisId,
             Placement = AxisPlacement.Bottom,
@@ -234,11 +244,12 @@ public class RangePaddingDemoViewModel : ChartDemoViewModelBase
             AutoRange = _xAutoRange,
             VisibleRangeLimit = new DataRange(_xLimitMin, _xLimitMax),
             VisibleRangeLimitMode = _xLimitMode,
-            Title = "X 轴"
+            Base = _logBase,
+            Title = "X 轴（Log）"
         };
         XAxes.Add(XAxis);
 
-        YAxis = new LinearAxis
+        YAxis = new LogAxis
         {
             Id = Chart.DefaultYAxisId,
             Placement = AxisPlacement.Left,
@@ -246,9 +257,12 @@ public class RangePaddingDemoViewModel : ChartDemoViewModelBase
             AutoRange = _yAutoRange,
             VisibleRangeLimit = new DataRange(_yLimitMin, _yLimitMax),
             VisibleRangeLimitMode = _yLimitMode,
-            Title = "Y 轴"
+            Base = _logBase,
+            Title = "Y 轴（Log）"
         };
         YAxes.Add(YAxis);
+
+        Description = "对数轴留白测试 | 验证 Chart.PlotAreaMargin 视口留白功能，Y 轴为对数刻度";
     }
 
     private void BuildSeries()
@@ -257,30 +271,27 @@ public class RangePaddingDemoViewModel : ChartDemoViewModelBase
 
         switch (_selectedChartType)
         {
-            case DemoChartType.Line:
+            case LogDemoChartType.Line:
                 BuildLineSeries();
                 break;
-            case DemoChartType.Scatter:
+            case LogDemoChartType.Scatter:
                 BuildScatterSeries();
                 break;
-            case DemoChartType.Bar:
+            case LogDemoChartType.Bar:
                 BuildBarSeries();
                 break;
-            case DemoChartType.Area:
+            case LogDemoChartType.Area:
                 BuildAreaSeries();
-                break;
-            case DemoChartType.Ohlc:
-                BuildOhlcSeries();
                 break;
         }
     }
 
     private void BuildLineSeries()
     {
-        var data = CreateWaveformData();
+        var data = CreateExpGrowthData();
         Series.Add(new LineRenderableSeries
         {
-            Title = "复合波形",
+            Title = "指数增长",
             Stroke = Color.FromRgb(0, 188, 212),
             StrokeThickness = 2,
             LineStyle = LineStyle.Solid,
@@ -290,10 +301,10 @@ public class RangePaddingDemoViewModel : ChartDemoViewModelBase
 
     private void BuildScatterSeries()
     {
-        var data = CreateWaveformData();
+        var data = CreateExpGrowthData();
         Series.Add(new ScatterRenderableSeries
         {
-            Title = "复合波形",
+            Title = "指数增长",
             MarkerType = MarkerType.Diamond,
             MarkerSize = 6,
             MarkerColor = Color.FromRgb(233, 30, 99),
@@ -304,10 +315,10 @@ public class RangePaddingDemoViewModel : ChartDemoViewModelBase
 
     private void BuildBarSeries()
     {
-        var data = CreateBarData();
+        var data = CreateExpGrowthData();
         Series.Add(new BarRenderableSeries
         {
-            Title = "柱状图",
+            Title = "指数增长",
             Stroke = Color.FromRgb(255, 193, 7),
             Fill = Color.FromRgb(255, 193, 7),
             BarSpacing = 0.3,
@@ -317,10 +328,10 @@ public class RangePaddingDemoViewModel : ChartDemoViewModelBase
 
     private void BuildAreaSeries()
     {
-        var data = CreateWaveformData();
+        var data = CreateExpGrowthData();
         Series.Add(new AreaRenderableSeries
         {
-            Title = "复合波形",
+            Title = "指数增长",
             Stroke = Color.FromRgb(76, 175, 80),
             StrokeThickness = 2,
             Fill = Color.FromRgb(76, 175, 80),
@@ -329,67 +340,20 @@ public class RangePaddingDemoViewModel : ChartDemoViewModelBase
         });
     }
 
-    private void BuildOhlcSeries()
+    private static UniformDataSeries<double, double> CreateExpGrowthData()
     {
-        var data = CreateOhlcData();
-        Series.Add(new OhlcRenderableSeries
+        var data = new UniformDataSeries<double, double>(index => index + 1, x => x);
+        for (int i = 0; i < 50; i++)
         {
-            Title = "OHLC",
-            UpFill = Color.FromRgb(0, 200, 83),
-            DownFill = Color.FromRgb(255, 61, 61),
-            UpStroke = Color.FromRgb(0, 200, 83),
-            DownStroke = Color.FromRgb(255, 61, 61),
-            DataSeries = data
-        });
-    }
-
-    private static UniformDataSeries<double, double> CreateWaveformData()
-    {
-        var data = new UniformDataSeries<double, double>(index => index * 0.2, x => x);
-        for (int i = 0; i < 500; i++)
-        {
-            double x = i * 0.2;
-            double y = Math.Sin(x * 0.3) * 3 + Math.Cos(x * 0.07) * 1.5;
+            double y = Math.Pow(1.25, i);
             data.Append(y);
         }
         return data;
     }
-
-    private static UniformDataSeries<double, double> CreateBarData()
-    {
-        var data = new UniformDataSeries<double, double>(index => index, x => x);
-        var rng = new Random(42);
-        for (int i = 0; i < 30; i++)
-            data.Append(rng.NextDouble() * 8 - 4);
-        return data;
-    }
-
-    private static OhlcDataSeries CreateOhlcData()
-    {
-        var data = new OhlcDataSeries();
-        var rng = new Random(42);
-        double close = 5.0;
-        for (int i = 0; i < 100; i++)
-        {
-            double open = close;
-            double change = (rng.NextDouble() - 0.5) * 2;
-            close = open + change;
-            double high = Math.Max(open, close) + rng.NextDouble() * 1.5;
-            double low = Math.Min(open, close) - rng.NextDouble() * 1.5;
-            data.Append(i * 0.5, open, high, low, close);
-        }
-        return data;
-    }
 }
 
-public class DemoChartTypeOption(string label, DemoChartType value)
+public class LogChartTypeOption(string label, LogDemoChartType value)
 {
     public string Label { get; } = label;
-    public DemoChartType Value { get; } = value;
-}
-
-public class LimitModeOption(string label, VisibleRangeLimitMode value)
-{
-    public string Label { get; } = label;
-    public VisibleRangeLimitMode Value { get; } = value;
+    public LogDemoChartType Value { get; } = value;
 }

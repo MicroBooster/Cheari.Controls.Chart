@@ -8,18 +8,28 @@ namespace Cheari.Controls.Axes.CoordinateMappers;
 /// </summary>
 public class LogCoordinateMapper : ICoordinateMapper
 {
-    /// <summary>
-    /// 单例实例，避免重复创建。
-    /// </summary>
-    public static LogCoordinateMapper Instance { get; } = new();
+    private readonly double _base;
+    private readonly double _invLogBase;
 
     /// <summary>
-    /// 将数据坐标通过对数转换映射到屏幕坐标。
+    /// 底数为 10 的单例实例。
     /// </summary>
-    /// <param name="dataValue">数据坐标值</param>
-    /// <param name="dataRange">数据范围</param>
-    /// <param name="viewportSize">视口尺寸</param>
-    /// <returns>屏幕坐标值</returns>
+    public static LogCoordinateMapper Instance { get; } = new(10.0);
+
+    /// <summary>
+    /// 用指定底数创建对数坐标映射器。
+    /// </summary>
+    public LogCoordinateMapper(double logBase)
+    {
+        _base = logBase;
+        _invLogBase = 1.0 / Math.Log(logBase);
+    }
+
+    public double LogBase => _base;
+
+    internal double InvLogBase => _invLogBase;
+
+    /// <inheritdoc/>
     public double DataToScreen(double dataValue, DataRange dataRange, double viewportSize)
     {
         if (dataRange.Min <= 0 || dataRange.Max <= 0)
@@ -28,24 +38,20 @@ public class LogCoordinateMapper : ICoordinateMapper
         if (dataValue <= 0)
             return 0;
 
-        double logMin = Math.Log10(dataRange.Min);
-        double logMax = Math.Log10(dataRange.Max);
-        double logValue = Math.Log10(dataValue);
+        double logMin = Math.Log(dataRange.Min) * _invLogBase;
+        double logMax = Math.Log(dataRange.Max) * _invLogBase;
+        double logValue = Math.Log(dataValue) * _invLogBase;
         double logLength = logMax - logMin;
 
         if (Math.Abs(logLength) < double.Epsilon)
             return 0;
 
-        return (logValue - logMin) / logLength * viewportSize;
+        double result = (logValue - logMin) / logLength * viewportSize;
+
+        return result;
     }
 
-    /// <summary>
-    /// 将屏幕坐标通过反对数转换映射到数据坐标。
-    /// </summary>
-    /// <param name="screenValue">屏幕坐标值</param>
-    /// <param name="dataRange">数据范围</param>
-    /// <param name="viewportSize">视口尺寸</param>
-    /// <returns>数据坐标值</returns>
+    /// <inheritdoc/>
     public double ScreenToData(double screenValue, DataRange dataRange, double viewportSize)
     {
         if (dataRange.Min <= 0 || dataRange.Max <= 0)
@@ -54,8 +60,8 @@ public class LogCoordinateMapper : ICoordinateMapper
         if (viewportSize <= 0)
             return dataRange.Min;
 
-        double logMin = Math.Log10(dataRange.Min);
-        double logMax = Math.Log10(dataRange.Max);
+        double logMin = Math.Log(dataRange.Min) * _invLogBase;
+        double logMax = Math.Log(dataRange.Max) * _invLogBase;
         double logLength = logMax - logMin;
 
         if (Math.Abs(logLength) < double.Epsilon)
@@ -63,6 +69,6 @@ public class LogCoordinateMapper : ICoordinateMapper
 
         double ratio = screenValue / viewportSize;
         double logValue = logMin + ratio * logLength;
-        return Math.Pow(10, logValue);
+        return Math.Pow(_base, logValue);
     }
 }

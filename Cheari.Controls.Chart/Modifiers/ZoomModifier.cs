@@ -99,7 +99,6 @@ public class ZoomModifier : IChartModifier
             if (defaultXAxis is AxisBase xBase)
             {
                 newXRange = xBase.ClampToVisibleRangeLimit(newXRange);
-                newXRange = xBase.ApplyRelativeRangePadding(newXRange);
             }
         }
 
@@ -114,7 +113,6 @@ public class ZoomModifier : IChartModifier
             if (defaultYAxis is AxisBase yBase)
             {
                 newYRange = yBase.ClampToVisibleRangeLimit(newYRange);
-                newYRange = yBase.ApplyRelativeRangePadding(newYRange);
             }
         }
 
@@ -129,7 +127,6 @@ public class ZoomModifier : IChartModifier
                 if (axis is AxisBase xb)
                 {
                     range = xb.ClampToVisibleRangeLimit(range);
-                    range = xb.ApplyRelativeRangePadding(range);
                 }
                 _context.SetAxisRange(axis.Id, range);
             }
@@ -144,7 +141,6 @@ public class ZoomModifier : IChartModifier
                 if (axis is AxisBase yb)
                 {
                     range = yb.ClampToVisibleRangeLimit(range);
-                    range = yb.ApplyRelativeRangePadding(range);
                 }
                 _context.SetAxisRange(axis.Id, range);
             }

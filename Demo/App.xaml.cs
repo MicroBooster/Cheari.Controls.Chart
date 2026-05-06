@@ -46,6 +46,7 @@ namespace Demo
             containerRegistry.RegisterForNavigation<StressTestView, StressTestViewModel>();
             containerRegistry.RegisterForNavigation<ComprehensiveVerificationView, ComprehensiveVerificationViewModel>();
             containerRegistry.RegisterForNavigation<RangePaddingDemoView, RangePaddingDemoViewModel>();
+            containerRegistry.RegisterForNavigation<LogRangePaddingDemoView, LogRangePaddingDemoViewModel>();
             containerRegistry.RegisterForNavigation<HomeView, HomeViewModel>();
         }
 

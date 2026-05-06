@@ -314,6 +314,7 @@ public class ChartRenderContext : IRenderContext
         var yRange = YRange;
         double pixelX = XMapper.DataToScreen(dataX, xRange, width);
         double pixelY = height - YMapper.DataToScreen(dataY, yRange, height);
+
         return new Point(
             pixelX / NormalizeDpiScale(DpiScaleX),
             pixelY / NormalizeDpiScale(DpiScaleY));
@@ -346,7 +347,8 @@ public class ChartRenderContext : IRenderContext
             return YRange.Min;
 
         double pixelY = Math.Clamp(screenY * NormalizeDpiScale(DpiScaleY), 0.0, height);
-        return YMapper.ScreenToData(height - pixelY, YRange, height);
+        pixelY = height - pixelY;
+        return YMapper.ScreenToData(pixelY, YRange, height);
     }
 
     /// <summary>

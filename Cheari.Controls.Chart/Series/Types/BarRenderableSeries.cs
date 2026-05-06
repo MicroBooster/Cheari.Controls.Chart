@@ -16,7 +16,7 @@ public class BarRenderableSeries : RenderableSeriesBase
     public Color Fill { get; set; } = Colors.DodgerBlue;
 
     /// <summary>
-    /// 获取或设置柱宽度（像素）。如果为0，则根据数据密度自动计算。
+    /// 获取或设置柱宽度（轴数据单位；对数轴下为变换后的轴空间宽度）。如果为0，则根据数据密度自动计算。
     /// </summary>
     public double BarWidth { get; set; }
 

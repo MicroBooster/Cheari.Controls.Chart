@@ -49,6 +49,16 @@ public class GridLinesControl : Canvas
         UseLayoutRounding = true;
     }
 
+    protected override void OnPropertyChanged(DependencyPropertyChangedEventArgs e)
+    {
+        base.OnPropertyChanged(e);
+
+        if (e.Property == Chart.PlotAreaMarginProperty)
+        {
+            RefreshGridLines();
+        }
+    }
+
     /// <summary>
     /// 标识 XAxes 依赖属性。
     /// </summary>
@@ -267,9 +277,15 @@ public class GridLinesControl : Canvas
             return null;
 
         double viewportSize = isXAxis ? width : height;
-        var majorPositions = GetVisibleTickPositions(axis, axis.GetMajorTicks(viewportSize), isXAxis, width, height);
+        var margin = Chart.GetPlotAreaMargin(this);
+        double paddedViewportSize = isXAxis
+            ? Math.Max(1, viewportSize - margin.Left - margin.Right)
+            : Math.Max(1, viewportSize - margin.Top - margin.Bottom);
+        double marginStart = isXAxis ? margin.Left : margin.Top;
+
+        var majorPositions = GetVisibleTickPositions(axis, axis.GetMajorTicks(paddedViewportSize), isXAxis, width, height, marginStart, paddedViewportSize);
         var majorKeys = new HashSet<int>(majorPositions.Select(CreatePixelKey));
-        var minorPositions = GetVisibleTickPositions(axis, axis.GetMinorTicks(viewportSize), isXAxis, width, height)
+        var minorPositions = GetVisibleTickPositions(axis, axis.GetMinorTicks(paddedViewportSize), isXAxis, width, height, marginStart, paddedViewportSize)
             .Where(position => !majorKeys.Contains(CreatePixelKey(position)))
             .ToArray();
 
@@ -369,13 +385,17 @@ public class GridLinesControl : Canvas
     /// <param name="isXAxis">是否为X轴</param>
     /// <param name="width">宽度</param>
     /// <param name="height">高度</param>
+    /// <param name="marginStart">margin起始偏移</param>
+    /// <param name="paddedViewportSize">扣除margin后的视口尺寸</param>
     /// <returns>位置数组</returns>
     private static double[] GetVisibleTickPositions(
         IAxis axis,
         TickInfo[] ticks,
         bool isXAxis,
         double width,
-        double height)
+        double height,
+        double marginStart,
+        double paddedViewportSize)
     {
         if (ticks.Length == 0)
             return Array.Empty<double>();
@@ -384,9 +404,10 @@ public class GridLinesControl : Canvas
 
         foreach (var tick in ticks)
         {
-            double position = isXAxis
-                ? axis.CoordinateMapper.DataToScreen(tick.Position, axis.VisibleRange, width)
-                : height - axis.CoordinateMapper.DataToScreen(tick.Position, axis.VisibleRange, height);
+            double position = axis.CoordinateMapper.DataToScreen(tick.Position, axis.VisibleRange, paddedViewportSize);
+            if (!isXAxis)
+                position = paddedViewportSize - position;
+            position = marginStart + position;
 
             if (double.IsNaN(position) || double.IsInfinity(position))
                 continue;

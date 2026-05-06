@@ -454,11 +454,12 @@
                                                         VerticalAlignment="Stretch"
                                                         XAxes="{Binding XAxes, RelativeSource={RelativeSource TemplatedParent}}"
                                                         YAxes="{Binding YAxes, RelativeSource={RelativeSource TemplatedParent}}" />
-                            <!-- Drawing Surface -->
+                            <!-- D3D11 Surface -->
                             <vortice:DrawingSurface x:Name="PART_Surface"
                                                     Grid.Row="3"
                                                     Grid.Column="2"
                                                     Stretch="Fill"
+                                                    Margin="{TemplateBinding PlotAreaMargin}"
                                                     HorizontalAlignment="Stretch"
                                                     VerticalAlignment="Stretch" />
                             <!-- Software Surface -->
@@ -466,6 +467,7 @@
                                    Grid.Row="3"
                                    Grid.Column="2"
                                    Stretch="Fill"
+                                   Margin="{TemplateBinding PlotAreaMargin}"
                                    HorizontalAlignment="Stretch"
                                    VerticalAlignment="Stretch"
                                    Visibility="Collapsed"

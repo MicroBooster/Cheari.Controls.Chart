@@ -40,10 +40,6 @@ public partial class Chart : Control
         DependencyPropertyDescriptor.FromProperty(AxisBase.AxisForegroundProperty, typeof(AxisBase));
     private static readonly DependencyPropertyDescriptor? s_axisAutoRangeDescriptor =
         DependencyPropertyDescriptor.FromProperty(AxisBase.AutoRangeProperty, typeof(AxisBase));
-    private static readonly DependencyPropertyDescriptor? s_axisRangePaddingMinDescriptor =
-        DependencyPropertyDescriptor.FromProperty(AxisBase.RangePaddingMinProperty, typeof(AxisBase));
-    private static readonly DependencyPropertyDescriptor? s_axisRangePaddingMaxDescriptor =
-        DependencyPropertyDescriptor.FromProperty(AxisBase.RangePaddingMaxProperty, typeof(AxisBase));
     private static readonly DependencyPropertyDescriptor? s_axisVisibleRangeLimitDescriptor =
         DependencyPropertyDescriptor.FromProperty(AxisBase.VisibleRangeLimitProperty, typeof(AxisBase));
     private static readonly DependencyPropertyDescriptor? s_axisVisibleRangeLimitModeDescriptor =
@@ -143,6 +139,37 @@ public partial class Chart : Control
     {
         get => (ObservableCollection<IAxis>)GetValue(YAxesProperty);
         set => SetValue(YAxesProperty, value);
+    }
+
+    /// <summary>
+    /// 标识 <see cref="PlotAreaMargin"/> 依赖属性（可继承的附加属性）。
+    /// </summary>
+    public static readonly DependencyProperty PlotAreaMarginProperty =
+        DependencyProperty.RegisterAttached("PlotAreaMargin", typeof(Thickness), typeof(Chart),
+            new FrameworkPropertyMetadata(new Thickness(0), FrameworkPropertyMetadataOptions.Inherits, OnPlotAreaMarginChanged));
+
+    /// <summary>
+    /// 获取或设置绘图区的外边距（像素值），为渲染 Surface 相对于 PlotArea 边框的缩进量。
+    /// 如 (30, 20, 30, 0) = 左缩30px、上缩20px、右缩30px、下不缩。
+    /// </summary>
+    public Thickness PlotAreaMargin
+    {
+        get => (Thickness)GetValue(PlotAreaMarginProperty);
+        set => SetValue(PlotAreaMarginProperty, value);
+    }
+
+    /// <summary>获取指定元素的 PlotAreaMargin 附加属性值。</summary>
+    public static Thickness GetPlotAreaMargin(DependencyObject obj)
+        => (Thickness)obj.GetValue(PlotAreaMarginProperty);
+
+    /// <summary>设置指定元素的 PlotAreaMargin 附加属性值。</summary>
+    public static void SetPlotAreaMargin(DependencyObject obj, Thickness value)
+        => obj.SetValue(PlotAreaMarginProperty, value);
+
+    private static void OnPlotAreaMarginChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is Chart chart)
+            chart.OnPlotAreaMarginChanged();
     }
 
     /// <summary>标识 <see cref="BottomXAxes"/> 只读依赖属性。</summary>
@@ -899,48 +926,34 @@ public partial class Chart : Control
 
             foreach (var xGroup in visibleSeries.GroupBy(s => s.XAxisId))
             {
+                var xRenderableSeries = xGroup.ToArray();
                 var xAxis = FindAxisOrDefault(XAxes, xGroup.Key);
-                var xDataSeries = xGroup.Select(s => s.DataSeries);
-                var coreRange = xAxis.CalculateAutoRange(xDataSeries);
-
-                if (xGroup.Any(s => s is BarRenderableSeries))
-                    coreRange = AdjustXRangeForBars(coreRange, xGroup);
-
-                DataRange clampedCore = coreRange;
-                if (xAxis is AxisBase xBase)
-                {
-                    clampedCore = xBase.ClampToVisibleRangeLimit(coreRange);
-                    coreRange = xBase.ApplyRelativeRangePadding(clampedCore);
-                }
+                var xDataSeries = xRenderableSeries.Select(s => s.DataSeries);
+                var autoRange = xAxis.CalculateAutoRange(xDataSeries);
+                var (clampedCore, visibleRange) = ComputeAutoFitRanges(autoRange, xAxis, xRenderableSeries, isXAxis: true);
 
                 touchedXAxisIds.Add(xGroup.Key);
-                xAxis.VisibleRange = coreRange;
                 xAxis.CoreRange = clampedCore;
+                xAxis.VisibleRange = visibleRange;
 
                 if (xGroup.Key == DefaultXAxisId)
-                    XRange = coreRange;
+                    XRange = xAxis.VisibleRange;
             }
 
             foreach (var yGroup in visibleSeries.GroupBy(s => s.YAxisId))
             {
+                var yRenderableSeries = yGroup.ToArray();
                 var yAxis = FindAxisOrDefault(YAxes, yGroup.Key);
-                var yDataSeries = yGroup.Select(s => s.DataSeries);
-                var coreRange = yAxis.CalculateAutoRange(yDataSeries);
-                coreRange = AdjustYRangeForBarBaseline(yGroup.Key, coreRange);
-
-                DataRange clampedCore = coreRange;
-                if (yAxis is AxisBase yBase)
-                {
-                    clampedCore = yBase.ClampToVisibleRangeLimit(coreRange);
-                    coreRange = yBase.ApplyRelativeRangePadding(clampedCore);
-                }
+                var yDataSeries = yRenderableSeries.Select(s => s.DataSeries);
+                var autoRange = yAxis.CalculateAutoRange(yDataSeries);
+                var (clampedCore, visibleRange) = ComputeAutoFitRanges(autoRange, yAxis, yRenderableSeries, isXAxis: false);
 
                 touchedYAxisIds.Add(yGroup.Key);
-                yAxis.VisibleRange = coreRange;
                 yAxis.CoreRange = clampedCore;
+                yAxis.VisibleRange = visibleRange;
 
                 if (yGroup.Key == DefaultYAxisId)
-                    YRange = coreRange;
+                    YRange = yAxis.VisibleRange;
             }
 
             SyncUntouchedAxesToDefaultRange(XAxes, touchedXAxisIds, DefaultXAxisId);
@@ -952,48 +965,6 @@ public partial class Chart : Control
         }
 
         SignalViewportChanged();
-    }
-
-    private static DataRange AdjustXRangeForBars(DataRange niceRange, IGrouping<string, IRenderableSeries> barGroup)
-    {
-        double rawMin = double.MaxValue;
-        double rawMax = double.MinValue;
-        double barWidth = 0;
-        double barSpacing = 0.2;
-        int totalCount = 0;
-
-        foreach (var s in barGroup)
-        {
-            if (s is BarRenderableSeries bar)
-            {
-                barSpacing = bar.BarSpacing;
-                if (bar.BarWidth > 0)
-                    barWidth = bar.BarWidth;
-            }
-
-            var ds = s.DataSeries;
-            for (int i = 0; i < ds.Count; i++)
-            {
-                double x = ds.GetX(i);
-                if (x < rawMin) rawMin = x;
-                if (x > rawMax) rawMax = x;
-                totalCount++;
-            }
-        }
-
-        if (totalCount == 0)
-            return niceRange;
-
-        double dataSpacing = totalCount > 1 ? (rawMax - rawMin) / (totalCount - 1) : 1.0;
-
-        if (barWidth <= 0)
-            barWidth = dataSpacing * (1.0 - barSpacing);
-        if (barWidth <= 0)
-            barWidth = dataSpacing * 0.8;
-
-        double halfBar = barWidth * 0.5;
-
-        return new DataRange(rawMin - halfBar, rawMax + halfBar);
     }
 
     /// <summary>更新修饰器集合，确保默认修饰器存在并刷新上下文。</summary>
